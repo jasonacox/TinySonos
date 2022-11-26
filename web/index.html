@@ -33,6 +33,9 @@
     <div class="queue"></div>
     <script>
 
+    // Globals
+    let lastnumq = 0;  // last number of songs in queue
+    
     // Get Version
     function showversion() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/stats";
@@ -48,11 +51,11 @@
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
         $.getJSON(pwurl, function(data) {
             console.log(pwurl);
-            var text = `Playing: ${data.title} - ${data.artist} - ${data.album} - ${data.position}/${data.duration} `;
+            var text = `Playing: ${data.title} - ${data.artist} - ${data.album} - ${data.duration} `;
             // TODO: album_art, metadata has title
             $(".playing").html(text);
         });
-        setTimeout(showplaying, 10000);
+        // setTimeout(showplaying, 10000);
     }
 
     // Get Speakers
@@ -66,7 +69,7 @@
             text = text + "\n"
             $(".speakers").html(text);
         });
-        setTimeout(showspeakers, 10000);
+        setTimeout(showspeakers, 60000);
     }
 
     // Number of Songs in Queue
@@ -74,6 +77,11 @@
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queuedepth";
         $.getJSON(pwurl, function(data) {
             var text = `Number of Songs in Queue: ${data.queuedepth}`;
+            if(data.queuedepth != lastnumq) {
+                lastnumq = data.queuedepth;
+                // update playing song 
+                showplaying(); 
+            }
             $(".queuedepth").html(data.queuedepth);
         });
         setTimeout(queuedepth, 1000);
@@ -149,7 +157,7 @@
     queuelist();
     showplaylists();
     showspeakers();
-    //showplaying();
+    showplaying();
     
     </script>
 
