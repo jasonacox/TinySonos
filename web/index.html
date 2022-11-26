@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<title>TinySonos API Server</title>
+    <title>TinySonos API Server</title>
     <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
     <script>
     // Globals
@@ -42,7 +42,7 @@
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
         $.getJSON(pwurl, function(data) {
             // console.log(pwurl);
-            var text = `Playing: ${data.title} - ${data.artist} - ${data.album} - ${data.duration} `;
+            var text = `${data.state}: ${data.title} - ${data.artist} - ${data.album} - ${data.duration} `;
             // TODO: album_art, metadata has title
             $(".playing").html(text);
         });
@@ -67,6 +67,7 @@
             lastzone = data.zone;
             var text = `${data.zone}`;
             $(".zone").html(text);
+            $(".volume").html(data.volume);
         });
         setTimeout(showstates, 5000);
     }
@@ -110,9 +111,10 @@
             for (let x in data) {
                 //console.log(x + ": "+ data[x])
                 let song = {
-                    "name": data[x].name,
+                    "title": data[x].title,
                     "id": x,
-                    "path": data[x].path
+                    "path": data[x].path,
+                    "length": data[x].length
                 }
                 songs.push(song)
                 total = total + 1
@@ -124,8 +126,9 @@
             //let sortedDevices = deviceDB.sort((c1, c2) => (c1.name > c2.name) ? 1 : (c1.name < c2.name) ? -1 : 0);
             let rownum = 1;
             for (let x in songs) {
+                let length = new Date(songs[x].length * 1000).toISOString().substring(14, 19)
                 output = output + rownum + 
-                    " - " + songs[x].name + " - " + songs[x].path + "<br>\n";
+                    " - " + songs[x].title + " [" + length + "]<br>\n";
                 rownum++;
             }
             
@@ -174,27 +177,51 @@
             // console.log(data);
         });   
         showstates();
+        showplaying(); 
     }
     </script>
+    <style>
+        html, body, form, fieldset, table, tr, td, img {
+            margin: 10;
+            padding: 5;
+            font: 100%/150% calibri,helvetica,sans-serif;
+        }
+        div.title {
+            font: 150% calibri,helvetica,sans-serif;
+        }
+        p.headings {
+            font: 120% calibri,helvetica,sans-serif;
+        }
+        p.playlisttitle {
+            font: 120% calibri,helvetica,sans-serif;
+        }
+        p.sonos {
+            font: 50% calibri,helvetica,sans-serif;
+        }
+        body {
+            font-size: 0.875em;
+        }
+        </style>
 </head>
 
 <body>
     <div class="title"></div>
-    <p>Sonos System</p>
-    <li class="sonos">Sonos: Unknown</li>
+    <p class="headings">Sonos System</p>
     <li class="playing">Playing: Unknown</li>
     <li class="speakers">Speaker Zones: Unknown</li>
-    <p>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
+    <li>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
         | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
         | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
-        | <a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
-        | <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a> 
+        | Volume <b class="volume">0</b> [<a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
+        / <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a>]
         | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeat">NO</b></a> 
         | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffle">NO</b></a>
+    </li>
     <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
     <div class="playlists"></div>
-    <p>Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clear');">Clear</a>] - Number: <b class="queuedepth">0</b></p>
+    <p class="headings">Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clear');">Clear</a>] - Number: <b class="queuedepth">0</b></p>
     <div class="queue"></div>
+    <p class="sonos">Sonos: Unknown</p>
     <script>
 
     // Display

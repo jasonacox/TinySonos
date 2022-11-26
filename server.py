@@ -248,7 +248,7 @@ class apihandler(BaseHTTPRequestHandler):
         return host
 
     def do_GET(self):
-        global musicqueue, zone, sonos, shuffle, repeat
+        global musicqueue, zone, sonos, shuffle, repeat, state
         self.send_response(200)
         message = "OK"
         contenttype = 'application/json'
@@ -290,6 +290,7 @@ class apihandler(BaseHTTPRequestHandler):
             s['zone'] = zone
             s['repeat'] = repeat
             s['shuffle'] = shuffle
+            s['volume'] = sonos.group.volume
             message = json.dumps(s)
         elif self.path=='/toggle/repeat':
             repeat = not repeat
@@ -304,7 +305,10 @@ class apihandler(BaseHTTPRequestHandler):
             # What is currently playing
             # TODO: title
             sonos = soco.SoCo(zone).group.coordinator
-            message = json.dumps(sonos.get_current_track_info())
+            c = sonos.get_current_track_info().copy()
+            state = sonos.get_current_transport_info()['current_transport_state']
+            c['state'] = state
+            message = json.dumps(c)
         elif self.path == '/queuedepth':
             # Give Internal Stats
             message = json.dumps({"queuedepth": len(musicqueue)})
@@ -325,13 +329,16 @@ class apihandler(BaseHTTPRequestHandler):
             playlist = parse_m3u("{}/{}".format(M3UPATH,playlistfile))
             songs = []
             for item in playlist:
-                songs.append(item['path'])
+                songs.append(item)
             if shuffle:
                 random.shuffle(songs)
             for item in songs:
                 song = {}
+                song['id'] = item['id']
+                song['title'] = item['title']
+                song['length'] = item['length']
                 song['path'] = "http://%s:%d%s" % (MEDIAHOST,
-                    MEDIAPORT, requests.utils.quote(item))
+                    MEDIAPORT, requests.utils.quote(item['path']))
                 musicqueue.append(song)
             message = "OK - Added {} Songs".format(len(songs))
         elif self.path.startswith('/playfile/'):
