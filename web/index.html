@@ -134,6 +134,12 @@
             
             $(".queue").html(output);
             $(".queuedepth").html(rownum-1);
+
+            if(rownum != lastnumq) {
+                lastnumq = rownum
+                // update playing song 
+                showplaying(); 
+            }
             
         });
         setTimeout(queuelist, 1000);
