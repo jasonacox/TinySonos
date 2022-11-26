@@ -103,6 +103,11 @@ shuffle = True
 # Global Variables
 running = True
 
+# Set up Sonos
+sonos = list(soco.discover())[0]
+sonos = sonos.group.coordinator
+zone = sonos.ip_address
+
 # Helpful Functions
 
 def formatreturn(value):
@@ -243,9 +248,9 @@ class apihandler(BaseHTTPRequestHandler):
         return host
 
     def do_GET(self):
-        global musicqueue, zone
+        global musicqueue, zone, sonos, shuffle, repeat
         self.send_response(200)
-        message = "Error"
+        message = "OK"
         contenttype = 'application/json'
         if self.path == '/speakers':
             # List of Sonos Speakers
@@ -270,24 +275,31 @@ class apihandler(BaseHTTPRequestHandler):
             # Clear current queue
             musicqueue = []
         elif self.path== '/play':
-            sonos = soco.SoCo(zone).group.coordinator
             sonos.play()
-            message = "OK"
         elif self.path== '/pause':
-            sonos = soco.SoCo(zone).group.coordinator
             sonos.pause()
-            message = "OK"
         elif self.path== '/stop':
-            sonos = soco.SoCo(zone).group.coordinator
             sonos.stop()
-            message = "OK"
         elif self.path== '/volumeup':
-            sonos = soco.SoCo(zone).group.coordinator
-            # TODO
+            sonos.group.volume = sonos.group.volume + 1
         elif self.path== '/volumedown':
-            sonos = soco.SoCo(zone).group.coordinator
-            # TODO
-
+            sonos.group.volume = sonos.group.volume - 1
+        elif self.path== '/state':
+            s = {}
+            s['state'] = state
+            s['zone'] = zone
+            s['repeat'] = repeat
+            s['shuffle'] = shuffle
+            message = json.dumps(s)
+        elif self.path=='/toggle/repeat':
+            repeat = not repeat
+        elif self.path=='/toggle/shuffle':
+            shuffle = not shuffle
+        elif self.path== '/sonos':
+            s = {}
+            s['household_id'] = sonos.household_id
+            s['uid'] = sonos.uid
+            message = json.dumps(s)
         elif self.path== '/current':
             # What is currently playing
             # TODO: title
@@ -341,6 +353,8 @@ class apihandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(fcontent)
                 return
+            else:
+                message = "404 Error"
 
         # Counts 
         if "Error" in message:
@@ -426,9 +440,6 @@ if __name__ == "__main__":
         "\nTinySonos Web Based Sonos Controller and Jukebox [v%s - SoCo %s]\n"
         % (BUILD, soco.__version__)
     )
-
-    # pick a starting zone
-    zone = list(soco.discover())[0].group.coordinator.ip_address
 
     # start threads
     print("Starting threads...")

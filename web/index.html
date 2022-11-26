@@ -4,53 +4,44 @@
 <title>TinySonos API Server</title>
     <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
     <script>
-    // Click On
-    function myclick(link) {
-        var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
-        console.log(clickurl)
-        $.get(clickurl, function(data) {
-            console.log(data)
-            alert(data);
-        });   
-    }
-    </script>
-</head>
-
-<body>
-    <div class="title"></div>
-    <p>Sonos System</p>
-    <li class="sonos">Sonos: Unknown</li>
-    <li class="playing">Playing: Unknown</li>
-    <li class="speakers">Speakers: Unknown</li>
-    <p>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
-        | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
-        | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
-        | <a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
-        | <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a> 
-    <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
-    <div class="playlists"></div>
-    <p>Songs in Queue [<a href="/queue/clear">Clear</a>] - Number: <b class="queuedepth">0</b></p>
-    <div class="queue"></div>
-    <script>
-
     // Globals
     let lastnumq = 0;  // last number of songs in queue
-    
+    let lastzone = 0;  // last speaker zone used
+
     // Get Version
     function showversion() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/stats";
         $.getJSON(pwurl, function(data) {
-            var text = `TinySonos Server v${data.tinysonos}`;
+            var text = `TinySonos Server v${data.tinysonos} [soco v${data.soco}]`;
             $(".title").html(text);
         });
-        setTimeout(showversion, 10000);
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/sonos";
+        $.getJSON(pwurl, function(data) {
+            var text = `Sonos: ${data.household_id} ${data.uid}`;
+            $(".sonos").html(text);
+        });
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
+        $.getJSON(pwurl, function(data) {
+            var text = `Speaker Zones: `;
+            for (let x in data) {
+                if(lastzone == data[x]) {
+                    text = text + "<b>" + x + " [" + data[x] + "]</b> - ";
+                }
+                else {
+                    text = text + x + " [" + data[x] + "] - ";
+                }
+            }
+            text = text + "\n"
+            $(".speakers").html(text);
+        });
+        setTimeout(showversion, 60000);
     }
 
     // Get Current Playing
     function showplaying() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
         $.getJSON(pwurl, function(data) {
-            console.log(pwurl);
+            // console.log(pwurl);
             var text = `Playing: ${data.title} - ${data.artist} - ${data.album} - ${data.duration} `;
             // TODO: album_art, metadata has title
             $(".playing").html(text);
@@ -58,33 +49,53 @@
         // setTimeout(showplaying, 10000);
     }
 
-    // Get Speakers
-    function showspeakers() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
+    // Get States
+    function showstates() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/state";
         $.getJSON(pwurl, function(data) {
-            var text = `Speaker Zones: `;
-            for (let x in data) {
-                text = text + x + " [" + data[x] + "] - "
+            // console.log(pwurl);
+            if(data.shuffle) {
+                $(".shuffle").html("YES");
+            } else {
+                $(".shuffle").html("NO");
             }
-            text = text + "\n"
-            $(".speakers").html(text);
+            if(data.repeat) {
+                $(".repeat").html("YES");
+            } else {
+                $(".repeat").html("NO");
+            }
+            lastzone = data.zone;
+            var text = `${data.zone}`;
+            $(".zone").html(text);
         });
-        setTimeout(showspeakers, 60000);
+        setTimeout(showstates, 5000);
     }
 
-    // Number of Songs in Queue
-    function queuedepth() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queuedepth";
+    // Playlists 
+    function showplaylists() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/listm3u";
         $.getJSON(pwurl, function(data) {
-            var text = `Number of Songs in Queue: ${data.queuedepth}`;
-            if(data.queuedepth != lastnumq) {
-                lastnumq = data.queuedepth;
-                // update playing song 
-                showplaying(); 
+            // store entire array 
+            let fn = "";
+            let name = "";
+            let output = "";
+            let total = 0;
+            let rownum = 1;
+            let playlists = data.sort() //(c1, c2) => (c1 > c2) ? 1 : (c1 < c2) ? -1 : 0);
+            // 
+            for (let x in playlists) {
+                output = output + "<li>" + 
+                    "<a href=\"#\" onclick=\"javascript:myclick('playlist/" +
+                    encodeURI(playlists[x]) + "');\">" + 
+                    playlists[x] + "</a></li>\n";
+                    
+                rownum++;
             }
-            $(".queuedepth").html(data.queuedepth);
+            
+            $(".playlists").html(output);
+            $(".playlistnumber").html(rownum-1)
         });
-        setTimeout(queuedepth, 1000);
+        setTimeout(showplaylists, 1000);
     }
 
     // Queue List
@@ -119,45 +130,79 @@
             }
             
             $(".queue").html(output);
+            $(".queuedepth").html(rownum-1);
             
         });
         setTimeout(queuelist, 1000);
     }
 
-    // Playlists 
-    function showplaylists() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/listm3u";
+    // This is not use yet
+    
+    // Get Speakers
+    function showspeakers() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
         $.getJSON(pwurl, function(data) {
-            // store entire array 
-            let fn = "";
-            let name = "";
-            let output = "";
-            let total = 0;
-            let rownum = 1;
-            let playlists = data.sort() //(c1, c2) => (c1 > c2) ? 1 : (c1 < c2) ? -1 : 0);
-            // 
-            for (let x in playlists) {
-                output = output + "<li>" + 
-                    "<a href=\"#\" onclick=\"javascript:myclick('playlist/" +
-                    encodeURI(playlists[x]) + "');\">" + 
-                    playlists[x] + "</a></li>\n";
-                    
-                rownum++;
+            var text = `Speaker Zones: `;
+            for (let x in data) {
+                text = text + x + " [" + data[x] + "] - "
             }
-            
-            $(".playlists").html(output);
-            $(".playlistnumber").html(rownum-1)
+            text = text + "\n"
+            $(".speakers").html(text);
         });
-        setTimeout(showplaylists, 1000);
+        setTimeout(showspeakers, 60000);
     }
+    // Number of Songs in Queue and States
+    function queuedepth() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queuedepth";
+        $.getJSON(pwurl, function(data) {
+            var text = `Number of Songs in Queue: ${data.queuedepth}`;
+            if(data.queuedepth != lastnumq) {
+                lastnumq = data.queuedepth;
+                // update playing song 
+                showplaying(); 
+            }
+            $(".queuedepth").html(data.queuedepth);
+        });
+        setTimeout(queuedepth, 1000);
+    }
+
+    // Click On
+    function myclick(link) {
+        var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
+        // console.log(clickurl)
+        $.get(clickurl, function(data) {
+            // console.log(data);
+        });   
+        showstates();
+    }
+    </script>
+</head>
+
+<body>
+    <div class="title"></div>
+    <p>Sonos System</p>
+    <li class="sonos">Sonos: Unknown</li>
+    <li class="playing">Playing: Unknown</li>
+    <li class="speakers">Speaker Zones: Unknown</li>
+    <p>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
+        | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
+        | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
+        | <a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
+        | <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a> 
+        | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeat">NO</b></a> 
+        | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffle">NO</b></a>
+    <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
+    <div class="playlists"></div>
+    <p>Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clea');">Clear</a>] - Number: <b class="queuedepth">0</b></p>
+    <div class="queue"></div>
+    <script>
 
     // Display
     showversion();
-    queuedepth();
-    queuelist();
-    showplaylists();
-    showspeakers();
+    showstates();
     showplaying();
+    showplaylists();
+    queuelist();
     
     </script>
 
