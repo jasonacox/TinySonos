@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>TinySonos API Server</title>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script>
+    // Click On
+    function myclick(link) {
+        var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
+        console.log(clickurl)
+        $.get(clickurl, function(data) {
+            console.log(data)
+            alert(data);
+        });   
+    }
+    </script>
+</head>
+
+<body>
+    <div class="title"></div>
+    <p>Sonos System</p>
+    <li class="sonos">Sonos: Unknown</li>
+    <li class="playing">Playing: Unknown</li>
+    <li class="speakers">Speakers: Unknown</li>
+    <p>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
+        | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
+        | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
+        | <a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
+        | <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a> 
+    <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
+    <div class="playlists"></div>
+    <p>Songs in Queue [<a href="/queue/clear">Clear</a>] - Number: <b class="queuedepth">0</b></p>
+    <div class="queue"></div>
+    <script>
+
+    // Get Version
+    function showversion() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/stats";
+        $.getJSON(pwurl, function(data) {
+            var text = `TinySonos Server v${data.tinysonos}`;
+            $(".title").html(text);
+        });
+        setTimeout(showversion, 10000);
+    }
+
+    // Get Current Playing
+    function showplaying() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
+        $.getJSON(pwurl, function(data) {
+            console.log(pwurl);
+            var text = `Playing: ${data.title} - ${data.artist} - ${data.album} - ${data.position}/${data.duration} `;
+            // TODO: album_art, metadata has title
+            $(".playing").html(text);
+        });
+        setTimeout(showplaying, 10000);
+    }
+
+    // Get Speakers
+    function showspeakers() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
+        $.getJSON(pwurl, function(data) {
+            var text = `Speaker Zones: `;
+            for (let x in data) {
+                text = text + x + " [" + data[x] + "] - "
+            }
+            text = text + "\n"
+            $(".speakers").html(text);
+        });
+        setTimeout(showspeakers, 10000);
+    }
+
+    // Number of Songs in Queue
+    function queuedepth() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queuedepth";
+        $.getJSON(pwurl, function(data) {
+            var text = `Number of Songs in Queue: ${data.queuedepth}`;
+            $(".queuedepth").html(data.queuedepth);
+        });
+        setTimeout(queuedepth, 1000);
+    }
+
+    // Queue List
+    function queuelist() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queue";
+        $.getJSON(pwurl, function(data) {
+            // store entire array in deviceDB
+            let songs = [];
+            let output = "";
+            let total = 0;
+            // 
+            for (let x in data) {
+                //console.log(x + ": "+ data[x])
+                let song = {
+                    "name": data[x].name,
+                    "id": x,
+                    "path": data[x].path
+                }
+                songs.push(song)
+                total = total + 1
+            }
+            var text = `Number of Songs in Queue: ${total}`
+            $(".number").html(text);
+
+            // print sorted list
+            //let sortedDevices = deviceDB.sort((c1, c2) => (c1.name > c2.name) ? 1 : (c1.name < c2.name) ? -1 : 0);
+            let rownum = 1;
+            for (let x in songs) {
+                output = output + rownum + 
+                    " - " + songs[x].name + " - " + songs[x].path + "<br>\n";
+                rownum++;
+            }
+            
+            $(".queue").html(output);
+            
+        });
+        setTimeout(queuelist, 1000);
+    }
+
+    // Playlists 
+    function showplaylists() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/listm3u";
+        $.getJSON(pwurl, function(data) {
+            // store entire array 
+            let fn = "";
+            let name = "";
+            let output = "";
+            let total = 0;
+            let rownum = 1;
+            let playlists = data.sort() //(c1, c2) => (c1 > c2) ? 1 : (c1 < c2) ? -1 : 0);
+            // 
+            for (let x in playlists) {
+                output = output + "<li>" + 
+                    "<a href=\"#\" onclick=\"javascript:myclick('playlist/" +
+                    encodeURI(playlists[x]) + "');\">" + 
+                    playlists[x] + "</a></li>\n";
+                    
+                rownum++;
+            }
+            
+            $(".playlists").html(output);
+            $(".playlistnumber").html(rownum-1)
+        });
+        setTimeout(showplaylists, 1000);
+    }
+
+    // Display
+    showversion();
+    queuedepth();
+    queuelist();
+    showplaylists();
+    showspeakers();
+    //showplaying();
+    
+    </script>
+
+</body>
+</html>
