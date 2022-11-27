@@ -175,12 +175,25 @@
         setTimeout(queuedepth, 1000);
     }
 
+    // Alert
+    function removeNotification() {
+        $(".alert").hide(100);
+    }
+
+    function displayNotification(notification) {
+        $(".alert").show(100);
+        $(".alerttext").html(notification);
+        setTimeout(() => {
+            removeNotification();
+        }, 4000);
+    }
+
     // Click On
     function myclick(link) {
         var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
         // console.log(clickurl)
         $.get(clickurl, function(data) {
-            // console.log(data);
+            displayNotification("Response: " + data.Response)
         });   
         showstates();
         showplaying(); 
@@ -207,17 +220,52 @@
         body {
             font-size: 0.875em;
         }
+        /* The alert message box */
+        .alert {
+            padding: 20px;
+            background-color: #000000; /* Red */
+            color: white;
+            margin-bottom: 15px;
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            width: 300px;
+            max-width: calc(100% - 30px);
+        }
+
+        /* The close button */
+        .closebtn {
+            margin-left: 15px;
+            color: white;
+            font-weight: bold;
+            float: right;
+            font-size: 22px;
+            line-height: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        /* When moving the mouse over the close button */
+        .closebtn:hover {
+            color: black;
+        }
         </style>
 </head>
 
 <body>
     <div class="title"></div>
+    <div class="alert" hidden="true">
+        <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+        <b class="alerttext">This is an alert</b>
+    </div>
     <p class="headings">Sonos System</p>
     <li class="playing">Playing: Unknown</li>
     <li class="speakers">Speaker Zones: Unknown</li>
     <li>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
         | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
         | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
+        | <a href="#" onclick="javascript:myclick('prev');"><< Prev</a> 
+        | <a href="#" onclick="javascript:myclick('next');">Next >></a> 
         | Volume <b class="volume">0</b> [<a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
         / <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a>]
         | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeat">NO</b></a> 

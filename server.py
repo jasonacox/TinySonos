@@ -251,7 +251,7 @@ class apihandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global musicqueue, zone, sonos, shuffle, repeat, state, stop
         self.send_response(200)
-        message = "OK"
+        message = json.dumps({"Response": "OK"})
         contenttype = 'application/json'
         if self.path == '/speakers':
             # List of Sonos Speakers
@@ -288,6 +288,32 @@ class apihandler(BaseHTTPRequestHandler):
             sonos.group.volume = sonos.group.volume + 1
         elif self.path== '/volumedown':
             sonos.group.volume = sonos.group.volume - 1
+        elif self.path== '/next':
+            if len(musicqueue) > 0 :
+                # Queue up next song
+                song = musicqueue.pop(0)
+                if repeat:
+                    musicqueue.append(song)
+                # Play it
+                sonos.play_uri(song['path'])
+                stop = False
+            else:
+                 message = json.dumps({"Response": "Playlist Empty"})
+        elif self.path== '/prev':
+            if repeat and len(musicqueue) > 1:
+                   # Queue up next song
+                song = musicqueue.pop
+                musicqueue.insert(0, song)
+                song = musicqueue.pop
+                musicqueue.append(song)
+                # Play it
+                sonos.play_uri(song['path'])
+                stop = False
+            else:
+                if len(musicqueue) <= 1:
+                    message = json.dumps({"Response": "Playlist Empty"})
+                else:
+                    sonos.previous()
         elif self.path== '/state':
             s = {}
             s['state'] = state
@@ -344,7 +370,7 @@ class apihandler(BaseHTTPRequestHandler):
                 song['path'] = "http://%s:%d%s" % (MEDIAHOST,
                     MEDIAPORT, requests.utils.quote(item['path']))
                 musicqueue.append(song)
-            message = "OK - Added {} Songs".format(len(songs))
+            message = json.dumps({"Response": "Added {} Songs".format(len(songs))})
         elif self.path.startswith('/playfile/'):
             # Load single song into queue - file in URI
             # TODO: Add other details
@@ -354,7 +380,7 @@ class apihandler(BaseHTTPRequestHandler):
             print("Add PlayFile: {}".format(playfile))
             song['path'] = "http://%s:%d/%s" % (MEDIAHOST, MEDIAPORT, playfile)
             musicqueue.append(song)
-            message = "OK - Added 1 Song"
+            message = json.dumps({"Response": "Added 1 Song"})
         else:
             # Serve static assets from web root first, if found.
             fcontent, ftype = get_static(web_root, self.path)
