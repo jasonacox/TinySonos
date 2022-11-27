@@ -99,6 +99,7 @@ zone = None         # Zone to use
 state = None
 repeat = False
 shuffle = True
+stop = False
 
 # Global Variables
 running = True
@@ -248,7 +249,7 @@ class apihandler(BaseHTTPRequestHandler):
         return host
 
     def do_GET(self):
-        global musicqueue, zone, sonos, shuffle, repeat, state
+        global musicqueue, zone, sonos, shuffle, repeat, state, stop
         self.send_response(200)
         message = "OK"
         contenttype = 'application/json'
@@ -275,10 +276,13 @@ class apihandler(BaseHTTPRequestHandler):
             # Clear current queue
             musicqueue = []
         elif self.path== '/play':
+            stop = False
             sonos.play()
         elif self.path== '/pause':
+            stop = True
             sonos.pause()
         elif self.path== '/stop':
+            stop = True
             sonos.stop()
         elif self.path== '/volumeup':
             sonos.group.volume = sonos.group.volume + 1
@@ -390,7 +394,7 @@ def jukebox():
             print("Jukebox: switching to {} speakers".format(zone))
             sonos = soco.SoCo(zone).group.coordinator
         # Are there items in the queue?
-        if len(musicqueue) > 0:
+        if len(musicqueue) > 0 and not stop:
             # is it running?
             state = sonos.get_current_transport_info()['current_transport_state']
             print("STATE: Sonos {}".format(state), end="\r")
