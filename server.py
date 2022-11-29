@@ -1,16 +1,21 @@
-# SoCo-CLI Web Based Sonos Controller
+# TinySonos - Web Based Sonos Controller
 # -*- coding: utf-8 -*-
 """
-SoCo-CLI Web Based Control Panel for Sonos WiFi Speaker System. This will allow you
-to control and play audio files from your server to the Sonos system, including
-multiple audio file formats and m3u playlist.
+Web Based Control Panel and Jukebox for Sonos WiFi Speaker System. This provides
+ability to control and play audio files from a localhost/server on a Sonos system,
+including multiple audio file formats and m3u playlist.
 
 Author: Jason A. Cox
 Date: November 23, 2022
-For more information see https://github.com/jasonacox/soco-cli
+For more information see https://github.com/jasonacox/tinysonos
 
 Description
-    Server listens for GET requests on local port 8001:
+    Server provides web based control panel on local TCP 8001 and a Sonos
+    compatible media file server on TCP 54000.  
+
+    Setup - edit defaults below or send as environmental variables
+    Run - python3 server.py
+    Test - http://localhost:8001
 
 Credits:
     * https://github.com/SoCo/SoCo
