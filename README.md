@@ -20,6 +20,23 @@ The services will auto-discover your Sonos system and will attach to the first z
 
 TinySonos Control Panel: http://localhost:8001/
 
+## Docker Run [Optional]
+
+Run the Server as a Docker Container listening on port 8001 and 54000. Make sure you update the media path, MEDIAPATH and DROPPREFIX below to match your setup.
+
+    ```bash
+    docker run \
+    -d \
+    -p 8001:8001 \
+    -p 54000:54000 \
+    -e MEDIAPATH='/media' \
+    -e DROPPREFIX='/media' \
+    -v /Volumes/Plex:/media:ro \
+    --name tinysonos \
+    --user ${UID} \
+    --restart unless-stopped \
+    jasonacox/tinysonos
+    ```
 
 ## Credits
 
