@@ -1,6 +1,6 @@
-FROM python:3.10
+FROM python:3.10-alpine
 WORKDIR /app
-RUN pip3 install soco
+RUN pip3 install soco rangehttpserver
 COPY . .
 CMD ["python3", "server.py"]
 EXPOSE 8001
