@@ -331,6 +331,11 @@ class apihandler(BaseHTTPRequestHandler):
             repeat = not repeat
         elif self.path=='/toggle/shuffle':
             shuffle = not shuffle
+        elif self.path== '/rescan':
+            # rescan/rediscover sonos system zones
+            sonos = list(soco.discover())[0]
+            sonos = sonos.group.coordinator
+            zone = sonos.ip_address
         elif self.path== '/sonos':
             s = {}
             s['household_id'] = sonos.household_id
