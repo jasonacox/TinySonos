@@ -27,13 +27,20 @@ For more information see https://github.com/jasonacox/tinysonos
         });
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
         $.getJSON(pwurl, function(data) {
-            var text = `Speaker Zones: `;
+            var text = ``;
+            var coord = ' ';
             for (let x in data) {
-                if(lastzone == data[x]) {
-                    text = text + "<b>" + x + " [" + data[x] + "]</b> - ";
+                if(data[x].coordinator) {
+                    coord = '*';
                 }
                 else {
-                    text = text + x + " [" + data[x] + "] - ";
+                    coord = ' ';
+                }
+                if(data[x].state) {
+                    text = text + "<a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\"><b>" + x + " [X]" + coord + "</b></a> - ";
+                }
+                else {
+                    text = text + "<a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + x + " [ ]" + coord + "</a> - ";
                 }
             }
             text = text + "\n"
@@ -156,7 +163,7 @@ For more information see https://github.com/jasonacox/tinysonos
     function showspeakers() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
         $.getJSON(pwurl, function(data) {
-            var text = `Speaker Zones: `;
+            var text = ``;
             for (let x in data) {
                 text = text + x + " [" + data[x] + "] - "
             }
@@ -202,6 +209,7 @@ For more information see https://github.com/jasonacox/tinysonos
         });   
         showstates();
         showplaying(); 
+        showversion();
     }
     </script>
     <style>
@@ -265,7 +273,7 @@ For more information see https://github.com/jasonacox/tinysonos
     </div>
     <p class="headings">Sonos System</p>
     <li class="playing">Playing: Unknown</li>
-    <li>Speaker Zones [<a href="#" onclick="javascript:myclick('rescan');">Rescan</a>]: <id class="speakers">Unknown</id></li>
+    <li>Speaker Zones: <id class="speakers">Unknown</id> [<a href="#" onclick="javascript:myclick('rescan');">Rescan</a>]</li>
     <li>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
         | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
         | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
@@ -275,7 +283,6 @@ For more information see https://github.com/jasonacox/tinysonos
         / <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a>]
         | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeat">NO</b></a> 
         | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffle">NO</b></a>
-        | <a href="#" onclick="javascript:myclick('rescan');">Rescan</a>
     </li>
     <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
     <div class="playlists"></div>

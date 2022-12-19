@@ -41,7 +41,7 @@ from RangeHTTPServer import RangeRequestHandler  # type: ignore
 import soco # type: ignore
 
 
-BUILD = "0.0.1"
+BUILD = "0.0.2"
 
 # Defaults
 APIPORT = 8001
@@ -260,11 +260,18 @@ class apihandler(BaseHTTPRequestHandler):
         contenttype = 'application/json'
         if self.path == '/speakers':
             # List of Sonos Speakers
+            if zone is None:
+                sonos = list(soco.discover())[0]
+                sonos = sonos.group.coordinator
+                zone = sonos.ip_address
             speakers = {}
             for z in soco.discover():
-                speakers[z.player_name] = z.ip_address
-                if zone is None:
-                    zone = z.ip_address
+                speakers[z.player_name] = {}
+                speakers[z.player_name]["ip"] = z.ip_address
+                speakers[z.player_name]["coordinator"] = soco.SoCo(z.ip_address).group.coordinator == soco.SoCo(z.ip_address)
+                soco.SoCo("10.0.1.183").group.members
+                member = soco.SoCo(z.ip_address) in soco.SoCo(zone).group.members
+                speakers[z.player_name]["state"] = member
             message = json.dumps(speakers)
         elif self.path.startswith('/setzone/'):
             zone = self.path.split('/setzone/')[1]
@@ -402,6 +409,7 @@ class apihandler(BaseHTTPRequestHandler):
                 return
             else:
                 message = "404 Error"
+                print(self.path)
 
         # Counts 
         if "Error" in message:
@@ -503,8 +511,8 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         running = False
         # Close down threads
-        requests.get("http://%s:%d/stop" % (MEDIAHOST, APIPORT))
-        requests.get("http://%s:%d/stop" % (MEDIAHOST, MEDIAPORT))
+        requests.get("http://%s:%d/stopthread" % (MEDIAHOST, APIPORT))
+        requests.get("http://%s:%d/stopthread" % (MEDIAHOST, MEDIAPORT))
         print("End")
 
     # threads completely executed
