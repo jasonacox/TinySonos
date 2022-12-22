@@ -54,11 +54,16 @@ For more information see https://github.com/jasonacox/tinysonos
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
         $.getJSON(pwurl, function(data) {
             // console.log(pwurl);
-            var text = `${data.state}: ${data.title} - ${data.artist} - ${data.album} - ${data.duration} `;
+            var text = `${data.state}: ${data.title} - ${data.artist} - ${data.album} - ${data.position}/${data.duration} `;
             // TODO: album_art, metadata has title
             $(".playing").html(text);
         });
-        // setTimeout(showplaying, 10000);
+    }
+
+    // Get Current Playing with Refresh
+    function showplayingR() {
+        showplaying()
+        setTimeout(showplayingR, 1000);
     }
 
     // Get States
@@ -108,7 +113,7 @@ For more information see https://github.com/jasonacox/tinysonos
             $(".playlists").html(output);
             $(".playlistnumber").html(rownum-1)
         });
-        setTimeout(showplaylists, 1000);
+        setTimeout(showplaylists, 5000);
     }
 
     // Queue List
@@ -154,7 +159,7 @@ For more information see https://github.com/jasonacox/tinysonos
             }
             
         });
-        setTimeout(queuelist, 1000);
+        setTimeout(queuelist, 5000);
     }
 
     // This is not use yet
@@ -294,7 +299,7 @@ For more information see https://github.com/jasonacox/tinysonos
     // Display
     showversion();
     showstates();
-    showplaying();
+    showplayingR();
     showplaylists();
     queuelist();
     
