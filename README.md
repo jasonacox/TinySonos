@@ -22,17 +22,16 @@ TinySonos Control Panel: http://localhost:8001/
 
 ## Docker Run [Optional]
 
-Run the Server as a Docker Container listening on port 8001 and 54000. Make sure you update the media path, MEDIAPATH and DROPPREFIX below to match your setup.
+Run the Server as a Docker Container.  The container runs in host network mode so it can hear UDP multicast broadcast from Sonos devices. Make sure you update the media path, MEDIAPATH, M3UPATH and DROPPREFIX below to match your setup.
 
 ```bash
 docker run \
 -d \
--p 8001:8001 \
--p 54000:54000 \
--p 1900:1900/udp \
+--network host \
 -e MEDIAPATH='/media' \
+-e M3UPATH='/media' \
 -e DROPPREFIX='/media' \
--v /Volumes/Plex:/media:ro \
+-v /media:/media:ro \
 --name tinysonos \
 --user ${UID} \
 --restart unless-stopped \

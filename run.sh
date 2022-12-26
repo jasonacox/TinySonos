@@ -1,11 +1,10 @@
 docker run \
 -d \
--p 8001:8001 \
--p 54000:54000 \
--p 1900:1900/udp \
+--network host \
+-e M3UPATH='/media' \
 -e MEDIAPATH='/media' \
 -e DROPPREFIX='/media' \
--v /Volumes/Plex:/media:ro \
+-v /media:/media:ro \
 --name tinysonos \
 --user ${UID} \
 --restart unless-stopped \
