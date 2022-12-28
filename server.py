@@ -41,7 +41,7 @@ from RangeHTTPServer import RangeRequestHandler  # type: ignore
 import soco # type: ignore
 
 
-BUILD = "0.0.4"
+BUILD = "0.0.5"
 
 # Defaults
 APIPORT = 8001
@@ -283,7 +283,17 @@ class apihandler(BaseHTTPRequestHandler):
                 soco.SoCo("10.0.1.183").group.members
                 member = soco.SoCo(z.ip_address) in soco.SoCo(zone).group.members
                 speakers[z.player_name]["state"] = member
+                speakers[z.player_name]["volume"] = z.volume
             message = json.dumps(speakers)
+        elif self.path.startswith('/speaker_vol/'):
+            # Set volume for a specific group
+            ip, updown = self.path.split('/speaker_vol/')[1].split('/')
+            if updown == "up":
+                vol = soco.SoCo(ip).volume + 1
+            else:
+                vol = soco.SoCo(ip).volume - 1
+            soco.SoCo(ip).ramp_to_volume(int(vol))
+            message = "OK"
         elif self.path.startswith('/setzone/'):
             zone = self.path.split('/setzone/')[1]
             message = "OK"

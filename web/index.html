@@ -37,27 +37,6 @@ Credits:
             var text = `Sonos: ${data.household_id} ${data.uid}`;
             $(".sonos").html(text);
         });
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
-        $.getJSON(pwurl, function(data) {
-            var text = ``;
-            var coord = ' ';
-            for (let x in data) {
-                if(data[x].coordinator) {
-                    coord = '*';
-                }
-                else {
-                    coord = ' ';
-                }
-                if(data[x].state) {
-                    text = text + "<a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\"><b>" + x + " [X]" + coord + "</b></a> - ";
-                }
-                else {
-                    text = text + "<a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + x + " [ ]" + coord + "</a> - ";
-                }
-            }
-            text = text + "\n"
-            $(".speakers").html(text);
-        });
         setTimeout(showversion, 60000);
     }
 
@@ -153,7 +132,31 @@ Credits:
             $(".zone").html(text);
             $(".volume").html(data.volume);
         });
-        //setTimeout(showstates(true), 5000);
+        // Speaker and volume update
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
+        $.getJSON(pwurl, function(data) {
+            var text = ``;
+            var coord = ' ';
+            for (let x in data) {
+                if(data[x].coordinator) {
+                    coord = '*';
+                }
+                else {
+                    coord = ' ';
+                }
+                var joined = " [ ]";
+                if(data[x].state) {
+                    joined = " [X]"
+                }
+                text = text + "<li><a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + 
+                    x + joined + coord + "</a>" + " - Volume: " + data[x].volume +
+                    " [<a href=\"#\" onclick=\"javascript:myclick('speaker_vol/" + data[x].ip + "/up');\"> Up+ </a>]" +
+                    " [<a href=\"#\" onclick=\"javascript:myclick('speaker_vol/" + data[x].ip + "/down');\"> Down- </a>]" +
+                    "</li>";
+            }
+            text = text + "\n"
+            $(".speakers").html(text);
+        });
     }
 
     // Playlists 
@@ -187,39 +190,15 @@ Credits:
     function queuelist() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queue";
         $.getJSON(pwurl, function(data) {
-            // store entire array in deviceDB
-            let songs = [];
             let output = "";
-            let total = 0;
-            // 
-            for (let x in data) {
-                //console.log(x + ": "+ data[x])
-                let song = {
-                    "title": data[x].title,
-                    "artist": data[x].artist,
-                    "album": data[x].album,
-                    "albumartist": data[x].albumartist,
-                    "id": x,
-                    "path": data[x].path,
-                    "length": data[x].length
-                }
-                songs.push(song)
-                total = total + 1
-            }
-            var text = `Number of Songs in Queue: ${total}`
-            $(".number").html(text);
-
-            // print sorted list
-            //let sortedDevices = deviceDB.sort((c1, c2) => (c1.name > c2.name) ? 1 : (c1.name < c2.name) ? -1 : 0);
             let rownum = 1;
-            for (let x in songs) {
-                let length = new Date(songs[x].length * 1000).toISOString().substring(14, 19)
-                output = output + rownum + " - " + songs[x].title +
-                    " - " + songs[x].album + " - " + songs[x].artist + " [" + 
+            for (let x in data) {
+                let length = new Date(data[x].length * 1000).toISOString().substring(14, 19)
+                output = output + rownum + " - " + data[x].title +
+                    " - " + data[x].album + " - " + data[x].artist + " [" + 
                     length + "]<br>\n";
                 rownum++;
             }
-            
             $(".queue").html(output);
             $(".queuedepth").html(rownum-1);
 
@@ -228,7 +207,6 @@ Credits:
                 // update playing song 
                 showplaying(); 
             }
-            
         });
     }
 
@@ -259,7 +237,7 @@ Credits:
     // Click On
     function myclick(link) {
         var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
-        // console.log(clickurl)
+        console.log(clickurl)
         $.get(clickurl, function(data) {
             displayNotification("Response: " + data.Response)
         });   
@@ -363,10 +341,8 @@ Credits:
             overflow: hidden;
             border:1px solid lightgray;
             border-radius: 10px;
-            padding-left: 5px;
-            margin: 0;
-            margin-bottom: 0;
-            margin-top: 0;
+            padding: 3px;
+            padding-left: 7px;
         }
 
         .playlists {
@@ -375,10 +351,8 @@ Credits:
             overflow: hidden;
             border:1px solid lightgray;
             border-radius: 10px;
-            padding-left: 5px;
-            margin: 0;
-            margin-bottom: 0;
-            margin-top: 0;
+            padding: 3px;
+            padding-left: 7px;
         }
 
         .queue {
@@ -387,10 +361,8 @@ Credits:
             overflow: hidden;
             border:1px solid lightgray;
             border-radius: 10px;
-            padding-left: 5px;
-            margin: 0;
-            margin-bottom: 0;
-            margin-top: 0;
+            padding: 3px;
+            padding-left: 7px;
         }
 
         .player-container {
@@ -733,17 +705,18 @@ Credits:
         <div class="datacolumn">
             <div class="sonostitle">Sonos</div>
             <div class="system">
-                <span>Speaker Zones: <id class="speakers">Unknown</id> [<a href="#" onclick="javascript:myclick('rescan');">Rescan</a>]</span>
-                <br>
-                <span>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
-                    | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
-                    | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
-                    | <a href="#" onclick="javascript:myclick('prev');"><< Prev</a> 
-                    | <a href="#" onclick="javascript:myclick('next');">Next >></a> 
-                    | Volume <b class="volume">0</b> [<a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
-                    / <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a>]
-                    | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeatT">NO</b></a> 
-                    | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffleT">NO</b></a>
+                <span>Speaker Volume:</b> <b class="volume">0</b> [<a href="#" onclick="javascript:myclick('volumeup');"> Up+ </a>  
+                    / <a href="#" onclick="javascript:myclick('volumedown');"> Down- </a>]</span>
+                <span class="speakers">Unknown</span>
+                <span>Controls: 
+                    <li><a href="#" onclick="javascript:myclick('play');">Play</a> 
+                        | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
+                        | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
+                        | <a href="#" onclick="javascript:myclick('prev');"><< Prev</a> 
+                        | <a href="#" onclick="javascript:myclick('next');">Next >></a> 
+                        | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeatT">NO</b></a> 
+                        | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffleT">NO</b></a>
+                    </li>
                 </span>
             </div>
             <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
