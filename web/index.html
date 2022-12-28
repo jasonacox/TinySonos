@@ -1,8 +1,20 @@
 <!DOCTYPE html>
 <!--
-TinySonos - Web Based Sonos Controller
+TinySonos - Sonos Jukebox and Controller
 
+Web Based Control Panel and Jukebox for Sonos WiFi Speaker System. This provides
+ability to control and play audio files from a localhost/server on a Sonos system,
+including multiple audio file formats and m3u playlist.
+
+Author: Jason A. Cox
+Date: November 23, 2022
 For more information see https://github.com/jasonacox/tinysonos
+
+Credits:
+* This Player UI code based on the great work by Annie Wu, 
+  https://github.com/anniedotexe/music-player with custom SVG Paths 
+  created at https://yqnn.github.io/svg-path-editor/ 
+
 -->
 <html lang="en">
 <head>
@@ -88,10 +100,17 @@ For more information see https://github.com/jasonacox/tinysonos
         }); 
     }
 
-    // Get Current Playing with Refresh
-    function showplayingR() {
+    // Things to Refresh every 1s
+    function refresh1s() {
         showplaying()
-        setTimeout(showplayingR, 1000);
+        queuedepth()
+        setTimeout(refresh1s, 1000);
+    }
+
+    // Things to Refresh every 5s
+    function refresh5s() {
+        showstates()
+        setTimeout(refresh5s, 5000);
     }
 
     // Get States
@@ -134,7 +153,7 @@ For more information see https://github.com/jasonacox/tinysonos
             $(".zone").html(text);
             $(".volume").html(data.volume);
         });
-        setTimeout(showstates, 5000);
+        //setTimeout(showstates(true), 5000);
     }
 
     // Playlists 
@@ -161,7 +180,7 @@ For more information see https://github.com/jasonacox/tinysonos
             $(".playlists").html(output);
             $(".playlistnumber").html(rownum-1)
         });
-        setTimeout(showplaylists, 5000);
+        // setTimeout(showplaylists, 5000);
     }
 
     // Queue List
@@ -177,6 +196,9 @@ For more information see https://github.com/jasonacox/tinysonos
                 //console.log(x + ": "+ data[x])
                 let song = {
                     "title": data[x].title,
+                    "artist": data[x].artist,
+                    "album": data[x].album,
+                    "albumartist": data[x].albumartist,
                     "id": x,
                     "path": data[x].path,
                     "length": data[x].length
@@ -192,8 +214,9 @@ For more information see https://github.com/jasonacox/tinysonos
             let rownum = 1;
             for (let x in songs) {
                 let length = new Date(songs[x].length * 1000).toISOString().substring(14, 19)
-                output = output + rownum + 
-                    " - " + songs[x].title + " [" + length + "]<br>\n";
+                output = output + rownum + " - " + songs[x].title +
+                    " - " + songs[x].album + " - " + songs[x].artist + " [" + 
+                    length + "]<br>\n";
                 rownum++;
             }
             
@@ -207,37 +230,17 @@ For more information see https://github.com/jasonacox/tinysonos
             }
             
         });
-        setTimeout(queuelist, 5000);
     }
 
-    // This is not use yet
-    
-    // Get Speakers
-    function showspeakers() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
-        $.getJSON(pwurl, function(data) {
-            var text = ``;
-            for (let x in data) {
-                text = text + x + " [" + data[x] + "] - "
-            }
-            text = text + "\n"
-            $(".speakers").html(text);
-        });
-        setTimeout(showspeakers, 60000);
-    }
-    // Number of Songs in Queue and States
+    // Number of Songs in Queue - do we update list?
     function queuedepth() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queuedepth";
         $.getJSON(pwurl, function(data) {
-            var text = `Number of Songs in Queue: ${data.queuedepth}`;
             if(data.queuedepth != lastnumq) {
                 lastnumq = data.queuedepth;
-                // update playing song 
-                showplaying(); 
+                setTimeout(queuelist, 100);
             }
-            $(".queuedepth").html(data.queuedepth);
         });
-        setTimeout(queuedepth, 1000);
     }
 
     // Alert
@@ -250,7 +253,7 @@ For more information see https://github.com/jasonacox/tinysonos
         $(".alerttext").html(notification);
         setTimeout(() => {
             removeNotification();
-        }, 4000);
+        }, 2000);
     }
 
     // Click On
@@ -403,7 +406,7 @@ For more information see https://github.com/jasonacox/tinysonos
             padding: 1.875rem 0;
             /* 30px */
             background-color: #FEFFFE;
-            height: 32rem;
+            height: auto;
             /* 640px */
             width: 22.5rem;
             /* 360px */
@@ -688,6 +691,7 @@ For more information see https://github.com/jasonacox/tinysonos
         
                         <div onclick="javascript:playtoggle();">
                             <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Path https://yqnn.github.io/svg-path-editor/ -->
                                 <path id="play" class="play-pause active"
                                     d="M25 0C11.1585 0 0 11.1585 0 25C0 38.8415 11.1585 50 25 50C38.8415 50 50 38.8415 50 25C50 11.1585 38.8415 0 25 0ZM36.0976 26.1585L19.4512 35.9146C19.2683 36.0366 18.9634 36.0976 18.7805 36.0976C18.5976 36.0976 18.2927 36.0366 18.1098 35.9146C17.6829 35.6098 17.439 35.2439 17.439 34.7561V15.3049H17.378C17.378 14.8171 17.6829 14.3293 18.0488 14.1463C18.4146 13.9634 19.0244 13.8415 19.4512 14.1463L36.0976 23.8415C36.5244 24.1463 36.7683 24.5122 36.7683 25C36.7683 25.4878 36.4634 25.9756 36.0976 26.1585Z"
                                     fill="#CC7E85" />
@@ -695,7 +699,7 @@ For more information see https://github.com/jasonacox/tinysonos
                                     d="M25 0C11.1875 0 0 11.1875 0 25C0 38.8125 11.1875 50 25 50C38.8125 50 50 38.8125 50 25C50 11.1875 38.8125 0 25 0ZM22.25 31.25C22.25 32.8125 21 34 19.5 34C17.9375 34 16.75 32.75 16.75 31.25V18.75C16.6875 17.25 17.9375 16 19.4375 16C21 16 22.25 17.25 22.25 18.75V31.25ZM33.3125 31.25C33.3125 32.8125 32.0625 34 30.5625 34C29 34 27.8125 32.75 27.8125 31.25V18.75C27.75 17.25 29 16 30.5 16C32.0625 16 33.3125 17.25 33.3125 18.75V31.25Z"
                                     fill="#CC7E85" />
                                 <path id="stop" class="play-pause"
-                                    d="M25 0C11.1875 0 0 11.1875 0 25 0 38.8125 11.1875 50 25 50 38.8125 50 50 38.8125 50 25 50 11.1875 38.8125 0 25 0ZM15 20C15 16 16 15 20 15L30 15C34 15 35 16 35 20L35 30C35 34 34 35 30 35L20 35C16 35 15 34 15 30Z"
+                                    d="M25 0C11.1875 0 0 11.1875 0 25 0 38.8125 11.1875 50 25 50 38.8125 50 50 38.8125 50 25 50 11.1875 38.8125 0 25 0ZM15 18C15 16 16 15 18 15L32 15C34 15 35 16 35 18L35 32C35 34 34 35 32 35L18 35C16 35 15 34 15 32Z"
                                     fill="#CC7E85" />
                             </svg>
                         </div>
@@ -760,11 +764,13 @@ For more information see https://github.com/jasonacox/tinysonos
 
     // Display
     showversion();
-    showstates();
-    //document.getElementById("shuffle").classList.toggle('active');
-    showplayingR();
     showplaylists();
     queuelist();
+    queuedepth();
+    // Refresh
+    refresh1s();
+    refresh5s();
+
     
     </script>
 

@@ -41,4 +41,5 @@ jasonacox/tinysonos
 ## Credits
 
 * This project uses the python library `soco` to access the Sonos APIs. See this project at: https://github.com/SoCo/SoCo
-* This project was inspired by the `soco-cli` project that expaned on `soco` to demonstarte how using a simple HTTP server could provide local file access to Sonos.  See the project at: https://github.com/avantrec/soco-cli
+* This project was inspired by the `soco-cli` project that expanded on `soco` to demonstrated how using a simple HTTP server could provide local file access to Sonos.  See the project at: https://github.com/avantrec/soco-cli
+* Player UI code based on the great work by Annie Wu, https://github.com/anniedotexe/music-player with custom SVG Paths created at https://yqnn.github.io/svg-path-editor/ 

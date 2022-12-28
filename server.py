@@ -41,7 +41,7 @@ from RangeHTTPServer import RangeRequestHandler  # type: ignore
 import soco # type: ignore
 
 
-BUILD = "0.0.3"
+BUILD = "0.0.4"
 
 # Defaults
 APIPORT = 8001
@@ -176,7 +176,7 @@ def parse_m3u(m3u_file):
                 song['length'] = length
                 artist = None
                 if " - " in title:
-                    title, artist = title.split(" - ")
+                    artist, title = title.split(" - ")
                 song['title'] = title
                 song['artist'] = artist
             elif line.startswith("#EXTALB:"): # album
@@ -394,6 +394,7 @@ class apihandler(BaseHTTPRequestHandler):
                 song = {}
                 song['id'] = item['id']
                 song['title'] = item['title']
+                song['artist'] = item['artist']
                 song['length'] = item['length']
                 song['album'] = item['album']
                 song['albumartist'] = item['albumartist']
