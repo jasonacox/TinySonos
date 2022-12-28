@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<!--
+TinySonos - Web Based Sonos Controller
+
+For more information see https://github.com/jasonacox/tinysonos
+-->
+<html lang="en">
+<head>
+    <title>TinySonos API Server</title>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script>
+    // Globals
+    var lastnumq = 0;  // last number of songs in queue
+    var lastzone = 0;  // last speaker zone used
+
+    // Get Version
+    function showversion() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/stats";
+        $.getJSON(pwurl, function(data) {
+            var text = `TinySonos Server v${data.tinysonos} [soco v${data.soco}]`;
+            $(".title").html(text);
+        });
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/sonos";
+        $.getJSON(pwurl, function(data) {
+            var text = `Sonos: ${data.household_id} ${data.uid}`;
+            $(".sonos").html(text);
+        });
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
+        $.getJSON(pwurl, function(data) {
+            var text = ``;
+            var coord = ' ';
+            for (let x in data) {
+                if(data[x].coordinator) {
+                    coord = '*';
+                }
+                else {
+                    coord = ' ';
+                }
+                if(data[x].state) {
+                    text = text + "<a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\"><b>" + x + " [X]" + coord + "</b></a> - ";
+                }
+                else {
+                    text = text + "<a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + x + " [ ]" + coord + "</a> - ";
+                }
+            }
+            text = text + "\n"
+            $(".speakers").html(text);
+        });
+        setTimeout(showversion, 60000);
+    }
+
+    // Get Current Playing
+    function showplaying() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
+        $.getJSON(pwurl, function(data) {
+            // console.log(pwurl);
+            var text = `${data.state}: ${data.title} - ${data.artist} - ${data.album} - ${data.position}/${data.duration} `;
+            // TODO: album_art, metadata has title
+            $(".playing").html(text);
+        });
+    }
+
+    // Get Current Playing with Refresh
+    function showplayingR() {
+        showplaying()
+        setTimeout(showplayingR, 1000);
+    }
+
+    // Get States
+    function showstates() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/state";
+        $.getJSON(pwurl, function(data) {
+            // console.log(pwurl);
+            if(data.shuffle) {
+                $(".shuffle").html("YES");
+            } else {
+                $(".shuffle").html("NO");
+            }
+            if(data.repeat) {
+                $(".repeat").html("YES");
+            } else {
+                $(".repeat").html("NO");
+            }
+            lastzone = data.zone;
+            var text = `${data.zone}`;
+            $(".zone").html(text);
+            $(".volume").html(data.volume);
+        });
+        setTimeout(showstates, 5000);
+    }
+
+    // Playlists 
+    function showplaylists() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/listm3u";
+        $.getJSON(pwurl, function(data) {
+            // store entire array 
+            let fn = "";
+            let name = "";
+            let output = "";
+            let total = 0;
+            let rownum = 1;
+            let playlists = data.sort() //(c1, c2) => (c1 > c2) ? 1 : (c1 < c2) ? -1 : 0);
+            // 
+            for (let x in playlists) {
+                output = output + "<li>" + 
+                    "<a href=\"#\" onclick=\"javascript:myclick('playlist/" +
+                    encodeURI(playlists[x]) + "');\">" + 
+                    playlists[x] + "</a></li>\n";
+                    
+                rownum++;
+            }
+            
+            $(".playlists").html(output);
+            $(".playlistnumber").html(rownum-1)
+        });
+        setTimeout(showplaylists, 5000);
+    }
+
+    // Queue List
+    function queuelist() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queue";
+        $.getJSON(pwurl, function(data) {
+            // store entire array in deviceDB
+            let songs = [];
+            let output = "";
+            let total = 0;
+            // 
+            for (let x in data) {
+                //console.log(x + ": "+ data[x])
+                let song = {
+                    "title": data[x].title,
+                    "id": x,
+                    "path": data[x].path,
+                    "length": data[x].length
+                }
+                songs.push(song)
+                total = total + 1
+            }
+            var text = `Number of Songs in Queue: ${total}`
+            $(".number").html(text);
+
+            // print sorted list
+            //let sortedDevices = deviceDB.sort((c1, c2) => (c1.name > c2.name) ? 1 : (c1.name < c2.name) ? -1 : 0);
+            let rownum = 1;
+            for (let x in songs) {
+                let length = new Date(songs[x].length * 1000).toISOString().substring(14, 19)
+                output = output + rownum + 
+                    " - " + songs[x].title + " [" + length + "]<br>\n";
+                rownum++;
+            }
+            
+            $(".queue").html(output);
+            $(".queuedepth").html(rownum-1);
+
+            if(rownum != lastnumq) {
+                lastnumq = rownum
+                // update playing song 
+                showplaying(); 
+            }
+            
+        });
+        setTimeout(queuelist, 5000);
+    }
+
+    // This is not use yet
+    
+    // Get Speakers
+    function showspeakers() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
+        $.getJSON(pwurl, function(data) {
+            var text = ``;
+            for (let x in data) {
+                text = text + x + " [" + data[x] + "] - "
+            }
+            text = text + "\n"
+            $(".speakers").html(text);
+        });
+        setTimeout(showspeakers, 60000);
+    }
+    // Number of Songs in Queue and States
+    function queuedepth() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queuedepth";
+        $.getJSON(pwurl, function(data) {
+            var text = `Number of Songs in Queue: ${data.queuedepth}`;
+            if(data.queuedepth != lastnumq) {
+                lastnumq = data.queuedepth;
+                // update playing song 
+                showplaying(); 
+            }
+            $(".queuedepth").html(data.queuedepth);
+        });
+        setTimeout(queuedepth, 1000);
+    }
+
+    // Alert
+    function removeNotification() {
+        $(".alert").hide(100);
+    }
+
+    function displayNotification(notification) {
+        $(".alert").show(100);
+        $(".alerttext").html(notification);
+        setTimeout(() => {
+            removeNotification();
+        }, 4000);
+    }
+
+    // Click On
+    function myclick(link) {
+        var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
+        // console.log(clickurl)
+        $.get(clickurl, function(data) {
+            displayNotification("Response: " + data.Response)
+        });   
+        showstates();
+        showplaying(); 
+        showversion();
+    }
+    </script>
+    <style>
+        html, body, form, fieldset, table, tr, td, img {
+            margin: 10;
+            padding: 5;
+            font: 100%/150% calibri,helvetica,sans-serif;
+        }
+        div.title {
+            font: 150% calibri,helvetica,sans-serif;
+        }
+        p.headings {
+            font: 120% calibri,helvetica,sans-serif;
+        }
+        p.playlisttitle {
+            font: 120% calibri,helvetica,sans-serif;
+        }
+        p.sonos {
+            font: 50% calibri,helvetica,sans-serif;
+        }
+        body {
+            font-size: 0.875em;
+        }
+        /* The alert message box */
+        .alert {
+            padding: 20px;
+            background-color: #000000; /* Red */
+            color: white;
+            margin-bottom: 15px;
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            width: 300px;
+            max-width: calc(100% - 30px);
+        }
+
+        /* The close button */
+        .closebtn {
+            margin-left: 15px;
+            color: white;
+            font-weight: bold;
+            float: right;
+            font-size: 22px;
+            line-height: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        /* When moving the mouse over the close button */
+        .closebtn:hover {
+            color: black;
+        }
+        </style>
+</head>
+
+<body>
+    <div class="title"></div>
+    <div class="alert" hidden="true">
+        <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
+        <b class="alerttext">This is an alert</b>
+    </div>
+    <p class="headings">Sonos System</p>
+    <li class="playing">Playing: Unknown</li>
+    <li>Speaker Zones: <id class="speakers">Unknown</id> [<a href="#" onclick="javascript:myclick('rescan');">Rescan</a>]</li>
+    <li>Controls: <a href="#" onclick="javascript:myclick('play');">Play</a> 
+        | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
+        | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
+        | <a href="#" onclick="javascript:myclick('prev');"><< Prev</a> 
+        | <a href="#" onclick="javascript:myclick('next');">Next >></a> 
+        | Volume <b class="volume">0</b> [<a href="#" onclick="javascript:myclick('volumeup');">Vol+</a>  
+        / <a href="#" onclick="javascript:myclick('volumedown');">Vol-</a>]
+        | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeat">NO</b></a> 
+        | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffle">NO</b></a>
+    </li>
+    <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
+    <div class="playlists"></div>
+    <p class="headings">Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clear');">Clear</a>] - Number: <b class="queuedepth">0</b></p>
+    <div class="queue"></div>
+    <p class="sonos">Sonos: Unknown</p>
+    <script>
+
+    // Display
+    showversion();
+    showstates();
+    showplayingR();
+    showplaylists();
+    queuelist();
+    
+    </script>
+
+</body>
+</html>

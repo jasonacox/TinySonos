@@ -41,7 +41,7 @@ from RangeHTTPServer import RangeRequestHandler  # type: ignore
 import soco # type: ignore
 
 
-BUILD = "0.0.2"
+BUILD = "0.0.3"
 
 # Defaults
 APIPORT = 8001
@@ -168,12 +168,23 @@ def parse_m3u(m3u_file):
                 return []
         playlist = []
         id = 0
-        song = {'id': 0, 'length': None, 'title': None, 'path': None}
+        song = {'id': id, 'length': None, 'title': None, 'path': None, 'album': None, 'artist': None, 'albumartist': None}
         for line in infile:
             line = line.strip()
-            if line.startswith("#EXTINF:"):
+            if line.startswith("#EXTINF:"):  # song artist - title
                 length, title = line.split("#EXTINF:")[1].split(",", 1)
-                song = {'id': id, 'length': length, 'title': title, 'path': None}
+                song['length'] = length
+                artist = None
+                if " - " in title:
+                    title, artist = title.split(" - ")
+                song['title'] = title
+                song['artist'] = artist
+            elif line.startswith("#EXTALB:"): # album
+                album = line.split("#EXTALB:")[1]
+                song['album'] = album
+            elif line.startswith("#EXTART:"): # album artist
+                album = line.split("#EXTART:")[1]
+                song['albumartist'] = album
             elif line.startswith("#"):
                 # Ignore comment lines
                 pass
@@ -182,7 +193,7 @@ def parse_m3u(m3u_file):
                 song['path'] = line
                 # TODO: Restrict to only MEDIAPATH
                 playlist.append(song)
-                song = {'id': 0, 'length': None, 'title': None, 'path': None}
+                song = {'id': id, 'length': None, 'title': None, 'path': None, 'album': None, 'artist': None, 'albumartist': None}
         return playlist
 
 # Scan path for m3u and m3u8 files
@@ -384,6 +395,8 @@ class apihandler(BaseHTTPRequestHandler):
                 song['id'] = item['id']
                 song['title'] = item['title']
                 song['length'] = item['length']
+                song['album'] = item['album']
+                song['albumartist'] = item['albumartist']
                 song['path'] = "http://%s:%d%s" % (MEDIAHOST,
                     MEDIAPORT, requests.utils.quote(item['path']))
                 musicqueue.append(song)
