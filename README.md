@@ -1,6 +1,8 @@
 # TinySonos
 Simple web service to control [Sonos](https://www.sonos.com/) speakers and play files from your local computer.
 
+<img width="800" alt="image" src="https://user-images.githubusercontent.com/836718/209888864-29897828-789f-477b-a1f8-77ecbf8552ad.png">
+
 ## Setup
 
 Edit these two variables in `server.py` or set in environment before running service:
