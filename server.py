@@ -37,11 +37,13 @@ import random
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from socketserver import ThreadingMixIn 
 from RangeHTTPServer import RangeRequestHandler  # type: ignore
+from queue import Empty
+from soco.events import event_listener
 
 import soco # type: ignore
 
 
-BUILD = "0.0.5"
+BUILD = "0.0.6"
 
 # Defaults
 APIPORT = 8001
@@ -176,7 +178,9 @@ def parse_m3u(m3u_file):
                 song['length'] = length
                 artist = None
                 if " - " in title:
-                    artist, title = title.split(" - ")
+                    pak = title.split(" - ")
+                    artist=pak[0]
+                    title=pak[1]
                 song['title'] = title
                 song['artist'] = artist
             elif line.startswith("#EXTALB:"): # album
@@ -447,6 +451,50 @@ class apihandler(BaseHTTPRequestHandler):
         self.wfile.write(bytes(message, "utf8"))
 
 # Threads
+
+def sonoslisten():
+    """
+    NOT USED YET
+    Thread to listen for Sonos events to reduce polling
+    """
+    global running, musicqueue, state, repeat, shuffle, zone
+    coordinator = None
+
+    sonos = soco.SoCo(zone).group.coordinator
+    device = soco.discover().pop().group.coordinator
+    print (device.player_name)
+    sub = device.renderingControl.subscribe()
+    sub2 = device.avTransport.subscribe()
+
+    while True:
+        if zone != coordinator:
+            # switch to new zone?
+            coordinator = zone
+            print("SonosListen: switching to {} speakers".format(zone))
+            device = soco.SoCo(zone).group.coordinator
+            sub = device.renderingControl.subscribe()
+            sub2 = device.avTransport.subscribe()
+        try:
+            event = sub.events.get(timeout=0.5)
+            print (event.variables)
+            # {'volume': {'LF': '100', 'Master': '6', 'RF': '100'}}
+        except Empty:
+            pass
+        try:
+            event = sub2.events.get(timeout=0.5)
+            print (event.variables)
+            # 'transport_state': 'PAUSED_PLAYBACK
+            # 'transport_state': 'TRANSITIONING'
+            # 'transport_state': 'PLAYING'
+            # event.variables['transport_state']
+        except Empty:
+            pass
+
+        except KeyboardInterrupt:
+            sub.unsubscribe()
+            sub2.unsubscribe()
+            event_listener.stop()
+            break
 
 def jukebox():
     """
