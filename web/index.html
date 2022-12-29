@@ -201,12 +201,6 @@ Credits:
             }
             $(".queue").html(output);
             $(".queuedepth").html(rownum-1);
-
-            if(rownum != lastnumq) {
-                lastnumq = rownum
-                // update playing song 
-                showplaying(); 
-            }
         });
     }
 
@@ -216,7 +210,8 @@ Credits:
         $.getJSON(pwurl, function(data) {
             if(data.queuedepth != lastnumq) {
                 lastnumq = data.queuedepth;
-                setTimeout(queuelist, 100);
+                setTimeout(showplaying, 500);
+                queuelist();
             }
         });
     }
@@ -253,17 +248,23 @@ Credits:
             var link = "";
             if (current=="PLAYING") {
                 link = "pause"
+                document.getElementById("play").classList='play-pause';
+                document.getElementById("stop").classList='play-pause';
+                document.getElementById("pause").classList='play-pause active';
             }
             else {
                 link = "play"
+                document.getElementById("pause").classList='play-pause';
+                document.getElementById("stop").classList='play-pause';
+                document.getElementById("play").classList='play-pause active';
             }
             var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
             $.get(clickurl, function(data) {
                 //displayNotification("Response: " + data.Response)
             });  
         });
-        setTimeout(showstates, 100);
-        setTimeout(showplaying, 100);
+        setTimeout(showstates, 1000);
+        setTimeout(showplaying, 500);
     }
     </script>
     <style>
