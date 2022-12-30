@@ -75,7 +75,8 @@ def export_playlists(host, token, dest="."):
                 artist = song.originalTitle
                 albumArtist = song.grandparentTitle
                 if artist == None:
-                    artist = albumArtist      
+                    artist = albumArtist     
+                m3u.write('#PLEX ALBUM=%s,SONG=%s\n' % (song.album().key.split('metadata/')[1],song.key.split('metadata/')[1])) 
                 m3u.write('#EXTALB:%s\n' % album)
                 m3u.write('#EXTART:%s\n' % albumArtist)  
                 # media file details
