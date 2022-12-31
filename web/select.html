@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!--
+TinySonos - Sonos Jukebox and Controller
+
+Web Based Control Panel and Jukebox for Sonos WiFi Speaker System. This provides
+ability to control and play audio files from a localhost/server on a Sonos system,
+including multiple audio file formats and m3u playlist.
+
+Author: Jason A. Cox
+Date: November 23, 2022
+For more information see https://github.com/jasonacox/tinysonos
+
+Credits:
+* This Player UI code based on the great work by Annie Wu, 
+  https://github.com/anniedotexe/music-player with custom SVG Paths 
+  created at https://yqnn.github.io/svg-path-editor/ 
+
+-->
+<html lang="en">
+<head>
+    <title>TinySonos API Server</title>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script>
+        // Globals
+        var lastnumq = 0;  // last number of songs in queue
+        var lastzone = 0;  // last speaker zone used
+    </script>
+    <style>
+        html, body, form, fieldset, table, tr, td, img {
+            margin: 10;
+            padding: 5;
+            font: 100%/150% calibri,helvetica,sans-serif;
+        }
+        p.headings {
+            font: 120% calibri,helvetica,sans-serif;
+            font-size: 1.25em;
+            font-weight: 700;
+        }
+        body {
+            font-size: 0.875em;
+        }
+    </style>
+    </head>
+    <body>
+        <div class="row">
+            <div class="menu">
+                <p class="headings">Menu</p>
+            </div>
+            <div class="show">
+                <p class="headings">List</p>
+            </div>
+        </div>
+        <script>
+        // Display
+        //showmenu();
+        //show();        
+        </script>
+    
+    </body>
+    </html>

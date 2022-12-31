@@ -52,17 +52,6 @@ Credits:
             $(".artist").html(data.artist);
             $("#current-time").html(data.position);
             $("#duration").html(data.duration);
-            // album art
-            if(data.album_art) {
-                if($("#album_art").attr("src")!=data.album_art) {
-                    $("#album_art").attr("src",data.album_art);
-                }
-            }
-            else {
-                if($("#album_art").attr("src")!='/notitle.png') {
-                    $("#album_art").attr("src",'/notitle.png');
-                }
-            }
             // pull title from XML metadata if not existing
             xml = $.parseXML(data.metadata)
             var xmltitle = xml.getElementsByTagName("dc:title")[0]
@@ -75,7 +64,24 @@ Credits:
             var b = data.duration.split(':'); 
             var b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
             $("#seek-slider").val(100 * a1/b1);
-
+            // album art
+            if(data.album_art2) {
+                    if($("#album_art").attr("src")!=data.album_art2) {
+                        $("#album_art").attr("src",data.album_art2);
+                    }
+                } 
+            else {
+                if(data.album_art) {
+                    if($("#album_art").attr("src")!=data.album_art) {
+                        $("#album_art").attr("src",data.album_art);
+                    }
+                }
+                else {
+                    if($("#album_art").attr("src")!='/notitle.png') {
+                        $("#album_art").attr("src",'/notitle.png');
+                    }
+                }
+            }
         }); 
     }
 
@@ -722,7 +728,9 @@ Credits:
             </div>
             <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
             <div class="playlists"></div>
-            <p class="headings">Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clear');">Clear</a>] - Number: <b class="queuedepth">0</b></p>
+            <p class="headings">Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clear');">Clear</a>] - Number: <b class="queuedepth">0</b>
+                <input type="button" value="Select Song" onclick="window.open('select.html','popUpWindow','height=500,width=400,left=100,top=100,resizable=yes,scrollbars=yes,toolbar=yes,menubar=no,location=no,directories=no, status=yes');">
+            </p>
             <div class="queue"></div>
             <p class="sonos">Sonos: Unknown</p>
         </div>

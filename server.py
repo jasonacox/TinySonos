@@ -39,11 +39,9 @@ from socketserver import ThreadingMixIn
 from RangeHTTPServer import RangeRequestHandler  # type: ignore
 from queue import Empty
 from soco.events import event_listener
-
 import soco # type: ignore
 
-
-BUILD = "0.0.6"
+BUILD = "0.0.8"
 
 # Defaults
 APIPORT = 8001
@@ -107,6 +105,7 @@ state = None
 repeat = False
 shuffle = True
 stop = False
+playing = {}        # Current song
 
 # Global Variables
 running = True
@@ -170,7 +169,7 @@ def parse_m3u(m3u_file):
                 return []
         playlist = []
         id = 0
-        song = {'id': id, 'length': None, 'title': None, 'path': None, 'album': None, 'artist': None, 'albumartist': None}
+        song = {'id': id, 'length': None, 'title': None, 'path': None, 'album': None, 'artist': None, 'albumartist': None, 'skey': None, 'akey': None}
         for line in infile:
             line = line.strip()
             if line.startswith("#EXTINF:"):  # song artist - title
@@ -183,12 +182,17 @@ def parse_m3u(m3u_file):
                     title=pak[1]
                 song['title'] = title
                 song['artist'] = artist
+            elif line.startswith("#PLEX"): # Plex index keys
+                #PLEX ALBUM=33,SONG=38
+                vals = line.split(",")
+                song['akey'] = int(vals[0].split("=")[1])
+                song['skey'] = int(vals[1].split("=")[1])
             elif line.startswith("#EXTALB:"): # album
                 album = line.split("#EXTALB:")[1]
                 song['album'] = album
             elif line.startswith("#EXTART:"): # album artist
-                album = line.split("#EXTART:")[1]
-                song['albumartist'] = album
+                albumartist = line.split("#EXTART:")[1]
+                song['albumartist'] = albumartist
             elif line.startswith("#"):
                 # Ignore comment lines
                 pass
@@ -197,7 +201,7 @@ def parse_m3u(m3u_file):
                 song['path'] = line
                 # TODO: Restrict to only MEDIAPATH
                 playlist.append(song)
-                song = {'id': id, 'length': None, 'title': None, 'path': None, 'album': None, 'artist': None, 'albumartist': None}
+                song = {'id': id, 'length': None, 'title': None, 'path': None, 'album': None, 'artist': None, 'albumartist': None, 'skey': None, 'akey': None}
         return playlist
 
 # Scan path for m3u and m3u8 files
@@ -269,11 +273,31 @@ class apihandler(BaseHTTPRequestHandler):
         return host
 
     def do_GET(self):
-        global musicqueue, zone, sonos, shuffle, repeat, state, stop
+        global musicqueue, zone, sonos, shuffle, repeat, state, stop, playing
         self.send_response(200)
         message = json.dumps({"Response": "OK"})
         contenttype = 'application/json'
-        if self.path == '/speakers':
+        if self.path== '/current':
+            # What is currently playing
+            sonos = soco.SoCo(zone).group.coordinator
+            c = sonos.get_current_track_info().copy()
+            state = sonos.get_current_transport_info()['current_transport_state']
+            c['state'] = state
+            if 'album_art' in playing:
+                c['album_art2'] = playing['album_art']
+            message = json.dumps(c)
+        elif self.path == '/queuedepth':
+            # Give Internal Stats
+            message = json.dumps({"queuedepth": len(musicqueue)})
+        elif self.path== '/state':
+            s = {}
+            s['state'] = state
+            s['zone'] = zone
+            s['repeat'] = repeat
+            s['shuffle'] = shuffle
+            s['volume'] = sonos.group.volume
+            message = json.dumps(s)
+        elif self.path == '/speakers':
             # List of Sonos Speakers
             if zone is None:
                 sonos = list(soco.discover())[0]
@@ -328,37 +352,29 @@ class apihandler(BaseHTTPRequestHandler):
         elif self.path== '/next':
             if len(musicqueue) > 0 :
                 # Queue up next song
-                song = musicqueue.pop(0)
+                playing = musicqueue.pop(0)
                 if repeat:
                     musicqueue.append(song)
                 # Play it
-                sonos.play_uri(song['path'])
+                sonos.play_uri(playing['path'])
                 stop = False
             else:
                  message = json.dumps({"Response": "Playlist Empty"})
         elif self.path== '/prev':
             if repeat and len(musicqueue) > 1:
                    # Queue up next song
-                song = musicqueue.pop
+                playing = musicqueue.pop
                 musicqueue.insert(0, song)
-                song = musicqueue.pop
-                musicqueue.append(song)
+                playing = musicqueue.pop
+                musicqueue.append(playing)
                 # Play it
-                sonos.play_uri(song['path'])
+                sonos.play_uri(playing['path'])
                 stop = False
             else:
                 if len(musicqueue) <= 1:
                     message = json.dumps({"Response": "Playlist Empty"})
                 else:
                     sonos.previous()
-        elif self.path== '/state':
-            s = {}
-            s['state'] = state
-            s['zone'] = zone
-            s['repeat'] = repeat
-            s['shuffle'] = shuffle
-            s['volume'] = sonos.group.volume
-            message = json.dumps(s)
         elif self.path=='/toggle/repeat':
             repeat = not repeat
         elif self.path=='/toggle/shuffle':
@@ -373,17 +389,8 @@ class apihandler(BaseHTTPRequestHandler):
             s['household_id'] = sonos.household_id
             s['uid'] = sonos.uid
             message = json.dumps(s)
-        elif self.path== '/current':
-            # What is currently playing
-            # TODO: title
-            sonos = soco.SoCo(zone).group.coordinator
-            c = sonos.get_current_track_info().copy()
-            state = sonos.get_current_transport_info()['current_transport_state']
-            c['state'] = state
-            message = json.dumps(c)
-        elif self.path == '/queuedepth':
-            # Give Internal Stats
-            message = json.dumps({"queuedepth": len(musicqueue)})
+        elif self.path=='/playing':
+            message = json.dumps(playing)
         elif self.path == '/listm3u' or self.path == '/playlists':
             # List all m3u files in M3UPATH
             message = json.dumps(list_m3u(M3UPATH))
@@ -414,6 +421,13 @@ class apihandler(BaseHTTPRequestHandler):
                 song['albumartist'] = item['albumartist']
                 song['path'] = "http://%s:%d%s" % (MEDIAHOST,
                     MEDIAPORT, requests.utils.quote(item['path']))
+                album_art = None
+                if item['akey']:
+                    album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
+                        MEDIAPORT, item['akey'])
+                song['album_art'] = album_art
+                song['akey'] = item['akey']
+                song['skey'] = item['skey']
                 musicqueue.append(song)
             message = json.dumps({"Response": "Added {} Songs".format(len(songs))})
         elif self.path.startswith('/playfile/'):
@@ -426,6 +440,9 @@ class apihandler(BaseHTTPRequestHandler):
             song['path'] = "http://%s:%d/%s" % (MEDIAHOST, MEDIAPORT, playfile)
             musicqueue.append(song)
             message = json.dumps({"Response": "Added 1 Song"})
+        # TODO
+        # elif self.path == '/select/albums':
+        # elif self.path == '/browse':
         else:
             # Serve static assets from web root first, if found.
             fcontent, ftype = get_static(web_root, self.path)
@@ -443,7 +460,13 @@ class apihandler(BaseHTTPRequestHandler):
         if "Error" in message:
             serverstats['errors'] = serverstats['errors'] + 1
         serverstats['gets'] = serverstats['gets'] + 1
-
+        """
+        # Count all API calls
+        if self.path in serverstats['api']:
+            serverstats['api'][self.path] += 1
+        else:
+            serverstats['api'][self.path] = 1
+        """
         # Send headers and payload
         self.send_header('Content-type',contenttype)
         self.send_header('Content-Length', str(len(message)))
@@ -500,7 +523,7 @@ def jukebox():
     """
     Thread to manage playlist and Sonos Speakers
     """
-    global running, musicqueue, state, repeat, shuffle, zone
+    global running, musicqueue, state, repeat, shuffle, zone, playing
     coordinator = None
 
     while running:
@@ -516,11 +539,11 @@ def jukebox():
             print("STATE: Sonos {}".format(state), end="\r")
             if state != "PLAYING":
                 # Queue up next song
-                song = musicqueue.pop(0)
+                playing = musicqueue.pop(0)
                 if repeat:
-                    musicqueue.append(song)
+                    musicqueue.append(playing)
                 # Play it
-                sonos.play_uri(song['path'])
+                sonos.play_uri(playing['path'])
                 print("")
         time.sleep(5)
 
