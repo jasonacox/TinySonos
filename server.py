@@ -41,7 +41,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.8"
+BUILD = "0.0.12"
 
 # Defaults
 APIPORT = 8001
@@ -352,14 +352,18 @@ class apihandler(BaseHTTPRequestHandler):
         elif self.path== '/next':
             if len(musicqueue) > 0 :
                 # Queue up next song
-                playing = musicqueue.pop(0)
-                if repeat:
-                    musicqueue.append(song)
+                #playing = musicqueue.pop(0)
+                #if repeat:
+                #    musicqueue.append(song)
                 # Play it
-                sonos.play_uri(playing['path'])
+                #sonos.play_uri(playing['path'])
+                sonos.stop()
                 stop = False
             else:
-                 message = json.dumps({"Response": "Playlist Empty"})
+                # empty playlist, send next command
+                sonos.next()
+                playing = {}
+                message = json.dumps({"Response": "Sent Next - Playlist Empty"})
         elif self.path== '/prev':
             if repeat and len(musicqueue) > 1:
                    # Queue up next song
@@ -422,7 +426,7 @@ class apihandler(BaseHTTPRequestHandler):
                 song['path'] = "http://%s:%d%s" % (MEDIAHOST,
                     MEDIAPORT, requests.utils.quote(item['path']))
                 album_art = None
-                if item['akey']:
+                if item['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, item['akey'])):
                     album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
                         MEDIAPORT, item['akey'])
                 song['album_art'] = album_art
