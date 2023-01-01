@@ -25,6 +25,16 @@ Credits:
     var lastnumq = 0;  // last number of songs in queue
     var lastzone = 0;  // last speaker zone used
 
+    // Fast and simple DOM update
+    function _updateHTML(element, html) {
+        var e = document.querySelector(element);
+        e.innerHTML = html;
+    }
+    function _updateVAL(element, val) {
+        var e = document.querySelector(element);
+        e.value = val;
+    }
+
     // Get Version
     function showversion() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/stats";
@@ -45,40 +55,39 @@ Credits:
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
         $.getJSON(pwurl, function(data) {
             //var text = `${data.state}: ${data.title} - ${data.artist} - ${data.album} - ${data.position}/${data.duration} ` 
-            // $(".playing").html(text);
-            // album info
-            $(".title").html(data.title);
-            $(".album").html(data.album);
-            $(".artist").html(data.artist);
-            $("#current-time").html(data.position);
-            $("#duration").html(data.duration);
+            document.querySelector(".title").innerHTML = data.title;
+            document.querySelector(".artist").innerHTML = data.artist;
+            document.querySelector(".album").innerHTML = data.album;
+            document.querySelector("#current-time").innerHTML = data.position;
+            document.querySelector("#duration").innerHTML = data.duration;
+
             // pull title from XML metadata if not existing
             xml = $.parseXML(data.metadata)
-            var xmltitle = xml.getElementsByTagName("dc:title")[0]
+            var xmltitle = xml.getElementsByTagName("dc:title")[0];
             if (data.title=='') {
-                $(".title").html(xmltitle.childNodes[0].nodeValue);
+                document.querySelector(".title").innerHTML = xmltitle.childNodes[0].nodeValue;
             }
             // seek slider bar
             var a = data.position.split(':'); 
             var a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
             var b = data.duration.split(':'); 
             var b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
-            $("#seek-slider").val(100 * a1/b1);
+            document.querySelector("#seek-slider").value = 100 * a1/b1;
             // album art
             if(data.album_art2) {
                     if($("#album_art").attr("src")!=data.album_art2) {
-                        $("#album_art").attr("src",data.album_art2);
+                        document.querySelector('#album_art').setAttribute('src', data.album_art2);
                     }
                 } 
             else {
                 if(data.album_art) {
                     if($("#album_art").attr("src")!=data.album_art) {
-                        $("#album_art").attr("src",data.album_art);
+                        document.querySelector('#album_art').setAttribute('src', data.album_art);
                     }
                 }
                 else {
                     if($("#album_art").attr("src")!='/notitle.png') {
-                        $("#album_art").attr("src",'/notitle.png');
+                        document.querySelector('#album_art').setAttribute('src', '/notitle.png');
                     }
                 }
             }
@@ -120,23 +129,22 @@ Credits:
             }
             // console.log(pwurl);
             if(data.shuffle) {
-                $(".shuffleT").html("YES");
+                document.querySelector(".shuffleT").innerHTML = "YES";
                 document.getElementById("shuffle").classList='active';
             } else {
-                $(".shuffleT").html("NO");
+                document.querySelector(".shuffleT").innerHTML = "NO";
                 document.getElementById("shuffle").classList='';
             }
             if(data.repeat) {
-                $(".repeatT").html("YES");
+                document.querySelector(".repeatT").innerHTML = "YES"
                 document.getElementById("repeat").classList='active';
             } else {
-                $(".repeatT").html("NO");
-                document.getElementById("repeat").classList=''
+                document.querySelector(".repeatT").innerHTML = "NO";
+                document.getElementById("repeat").classList='';
             }
             lastzone = data.zone;
             var text = `${data.zone}`;
-            $(".zone").html(text);
-            $(".volume").html(data.volume);
+            document.querySelector(".volume").innerHTML = data.volume;
         });
         // Speaker and volume update
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
@@ -161,7 +169,7 @@ Credits:
                     "</li>";
             }
             text = text + "\n"
-            $(".speakers").html(text);
+            document.querySelector(".speakers").innerHTML = text;
         });
     }
 
@@ -186,17 +194,26 @@ Credits:
                 rownum++;
             }
             
-            $(".playlists").html(output);
-            $(".playlistnumber").html(rownum-1)
+            document.querySelector(".playlists").innerHTML = output;
+            document.querySelector(".playlistnumber").innerHTML = rownum-1;
         });
         // setTimeout(showplaylists, 5000);
     }
 
     // Queue List
     function queuelist() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/playing";
+        var output = "";
+        $.getJSON(pwurl, function(data) {
+            if(data.length) {
+                var length = new Date(data.length * 1000).toISOString().substring(14, 19)
+                output = "<b>" + data.title +
+                        " - " + data.album + " - " + data.artist + " [" + 
+                        length + "]</b><br>\n";
+            }
+        });
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queue";
         $.getJSON(pwurl, function(data) {
-            let output = "";
             let rownum = 1;
             for (let x in data) {
                 let length = new Date(data[x].length * 1000).toISOString().substring(14, 19)
@@ -205,8 +222,8 @@ Credits:
                     length + "]<br>\n";
                 rownum++;
             }
-            $(".queue").html(output);
-            $(".queuedepth").html(rownum-1);
+            document.querySelector(".queue").innerHTML = output;
+            document.querySelector(".queuedepth").innerHTML = rownum-1;
         });
     }
 
