@@ -173,6 +173,15 @@ Credits:
         });
     }
 
+    // Clear bold items in menu
+    function clearmenu() {
+        document.getElementById("playlists").style.fontWeight = "normal";
+        document.getElementById("recent").style.fontWeight = "normal";
+        document.getElementById("albums").style.fontWeight = "normal";
+        document.getElementById("artists").style.fontWeight = "normal";
+        document.getElementById("songs").style.fontWeight = "normal";
+        document.getElementById("search").style.fontWeight = "normal";
+    }
     // Playlists 
     function showplaylists() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/listm3u";
@@ -194,8 +203,12 @@ Credits:
                 rownum++;
             }
             
-            document.querySelector(".playlists").innerHTML = output;
-            document.querySelector(".playlistnumber").innerHTML = rownum-1;
+            document.querySelector(".menutitle").innerHTML = "Playlists";
+            document.querySelector(".menunumber").innerHTML = rownum-1;
+            document.querySelector(".menucontent").innerHTML = output;
+            clearmenu();
+            document.getElementById("playlists").style.fontWeight = "bold";
+            
         });
         // setTimeout(showplaylists, 5000);
     }
@@ -289,7 +302,95 @@ Credits:
         setTimeout(showstates, 1000);
         setTimeout(showplaying, 500);
     }
+    
+    // Show Recent Albums 
+    function showrecent() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/recent";
+        var rownum = 1
+        $.getJSON(pwurl, function(data) {
+            // array of albums
+            var output = "";
+            for (let x in data) {
+                output = output + "<li>" + 
+                    "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
+                    encodeURI(data[x].key) + "');\">" + 
+                    data[x].title + "</a></li>\n";
+                rownum++;
+            }
+            document.querySelector(".menutitle").innerHTML = "Recently Added Albums";
+            document.querySelector(".menunumber").innerHTML = rownum-1;
+            document.querySelector(".menucontent").innerHTML = output;
+            clearmenu();
+            document.getElementById("recent").style.fontWeight = "bold";
+        });
+    }
+
+    // Show Albums 
+    function showalbums() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/all";
+        var rownum = 1
+        $.getJSON(pwurl, function(data) {
+            // array of albums
+            var output = "";
+            for (let x in data) {
+                output = output + "<li>" + 
+                    "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
+                    encodeURI(data[x].key) + "');\">" + 
+                    data[x].title + "</a></li>\n";
+                rownum++;
+            }
+            document.querySelector(".menutitle").innerHTML = "Albums";
+            document.querySelector(".menunumber").innerHTML = rownum-1;
+            document.querySelector(".menucontent").innerHTML = output;
+            clearmenu();
+            document.getElementById("albums").style.fontWeight = "bold";
+        });
+    }
+
+    // Show Songs 
+    function showsongs() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/recent";
+        var rownum = 1
+        $.getJSON(pwurl, function(data) {
+            // array of albums
+            var output = "";
+            for (let x in data) {
+                output = output + "<li>" + 
+                    "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
+                    encodeURI(data[x].key) + "');\">" + 
+                    data[x].title + "</a></li>\n";
+                rownum++;
+            }
+            document.querySelector(".menutitle").innerHTML = "Songs";
+            document.querySelector(".menunumber").innerHTML = rownum-1;
+            document.querySelector(".menucontent").innerHTML = output;
+            clearmenu();
+            document.getElementById("songs").style.fontWeight = "bold";
+        });
+    }
+
+    // Search 
+    function showsearch() {
+        var output = "Search TBD";
+        document.querySelector(".menutitle").innerHTML = "Search";
+        document.querySelector(".menunumber").innerHTML = "TBD"
+        document.querySelector(".menucontent").innerHTML = "";
+        clearmenu();
+        document.getElementById("search").style.fontWeight = "bold";
+    }
+
+    // Search 
+    function showartists() {
+        var output = "TBD";
+        document.querySelector(".menutitle").innerHTML = "Artists";
+        document.querySelector(".menunumber").innerHTML = "TBD"
+        document.querySelector(".menucontent").innerHTML = "";
+        clearmenu();
+        document.getElementById("artists").style.fontWeight = "bold";
+    }
     </script>
+
+
     <style>
         html, body, form, fieldset, table, tr, td, img {
             margin: 10;
@@ -358,6 +459,34 @@ Credits:
         .playercolumn {
             flex: 30%;
         }
+        .menu-row {
+            display: block;
+            background-color: #FEFFFE;
+            overflow: hidden;
+            border:1px solid lightgray;
+            border-radius: 10px;
+            padding: 3px;
+            padding-left: 7px;
+        }
+        .menu-left {
+            float: left;
+            position: relative;
+            display: block;
+        
+            padding: 3px;
+            padding-left: 4px;
+            padding-right: 7px;
+        }
+        .menu-right {
+            flex: 75%;
+            display: block;
+            background-color: #FEFFFE;
+            overflow: hidden;
+            border:1px solid lightgray;
+            border-radius: 10px;
+            padding: 3px;
+            padding-left: 7px;
+        }
 
         .system {
             display: block;
@@ -379,6 +508,14 @@ Credits:
             padding-left: 7px;
         }
 
+        .queue-container {
+            width: 362px;
+            position: relative;
+            margin: 0 auto;
+            /* top: 50%;
+            transform: translateY(-50%);*/
+        }
+
         .queue {
             display: block;
             background-color: #FEFFFE;
@@ -387,6 +524,8 @@ Credits:
             border-radius: 10px;
             padding: 3px;
             padding-left: 7px;
+            font-size: 0.5em;
+            line-height: 2.0em;
         }
 
         .player-container {
@@ -725,7 +864,14 @@ Credits:
                     </div>
                 </div>
             </div>
+            <div class="queue-container">
+                <p class="headings">Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clear');">Clear</a>] - Number: <b class="queuedepth">0</b>
+                </p>
+                <div class="queue"></div>
+                <input type="button" value="Select Song" onclick="window.open('select.html','popUpWindow','height=500,width=400,left=100,top=100,resizable=yes,scrollbars=yes,toolbar=yes,menubar=no,location=no,directories=no, status=yes');">
+            </div>
         </div>
+        
         <div class="datacolumn">
             <div class="sonostitle">Sonos</div>
             <div class="system">
@@ -743,14 +889,26 @@ Credits:
                     </li>
                 </span>
             </div>
-            <p class="playlisttitle">Playlists - Number: <b class="playlistnumber">0</b></p>
-            <div class="playlists"></div>
-            <p class="headings">Songs in Queue [<a href="#" onclick="javascript:myclick('queue/clear');">Clear</a>] - Number: <b class="queuedepth">0</b>
-                <input type="button" value="Select Song" onclick="window.open('select.html','popUpWindow','height=500,width=400,left=100,top=100,resizable=yes,scrollbars=yes,toolbar=yes,menubar=no,location=no,directories=no, status=yes');">
-            </p>
-            <div class="queue"></div>
+            <div class="menu-container">
+                <p class="headings">Song Library</p>
+                <div class="menu-row">
+                    <div class="menu-left">
+                        <p id="playlists"><a href="#" onclick="javascript:showplaylists();">Playlists</a></p>
+                        <p id="recent"><a href="#" onclick="javascript:showrecent();">Recent</a></p>
+                        <p id="albums"><a href="#" onclick="javascript:showalbums();">Albums</a></p>
+                        <p id="artists"><a href="#" onclick="javascript:showartists();">Artists</a></p>
+                        <p id="songs"><a href="#" onclick="javascript:showsongs();">Songs</a></p>
+                        <p id="search"><a href="#" onclick="javascript:showsearch();">Search</a></p>
+                    </div>
+                    <div class="menu-right">
+                        <span class="menuheading"><b class="menutitle">Menu Title</b> <b>[</b><b class="menunumber">0</b><b>]</b></span>
+                        <div class="menucontent"></div>
+                    </div>
+                </div>
+            </div>
             <p class="sonos">Sonos: Unknown</p>
         </div>
+        
     </div>
     <div class="alert" hidden="true">
         <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>

@@ -41,7 +41,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.12"
+BUILD = "0.0.13"
 
 # Defaults
 APIPORT = 8001
@@ -107,6 +107,14 @@ shuffle = True
 stop = False
 playing = {}        # Current song
 
+# Global Song Metabase
+db = {}
+db_added = {}
+db_albums = {}
+db_artists = {}
+db_songs = {}
+db_songkey = {}
+
 # Global Variables
 running = True
 
@@ -153,6 +161,25 @@ def detect_ip_address():
     ip_address = s.getsockname()[0]
     s.close()
     return ip_address
+
+def load_db():
+    """ Load database and index """
+    global db, db_added, db_albums, db_artists, db_songs, db_songkey
+    try:
+        f = open("%s/db.json" % MEDIAPATH)
+        db = json.load(f)
+        f = open("%s/db.added.json" % MEDIAPATH)
+        db_added = json.load(f)
+        f = open("%s/db.albums.json" % MEDIAPATH)
+        db_albums = json.load(f)
+        f = open("%s/db.artists.json" % MEDIAPATH)
+        db_artists = json.load(f)
+        f = open("%s/db.songs.json" % MEDIAPATH)
+        db_songs = json.load(f)
+        f = open("%s/db.songkey.json" % MEDIAPATH)
+        db_songkey = json.load(f)
+    except:
+        pass
 
 # Determine my Hostname
 if MEDIAHOST is None:
@@ -274,6 +301,7 @@ class apihandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         global musicqueue, zone, sonos, shuffle, repeat, state, stop, playing
+        global db, db_added, db_albums, db_artists, db_songs, db_songkey
         self.send_response(200)
         message = json.dumps({"Response": "OK"})
         contenttype = 'application/json'
@@ -351,16 +379,11 @@ class apihandler(BaseHTTPRequestHandler):
             sonos.group.volume = sonos.group.volume - 1
         elif self.path== '/next':
             if len(musicqueue) > 0 :
-                # Queue up next song
-                #playing = musicqueue.pop(0)
-                #if repeat:
-                #    musicqueue.append(song)
-                # Play it
-                #sonos.play_uri(playing['path'])
+                # Have jukebox queue up next song
                 sonos.stop()
                 stop = False
             else:
-                # empty playlist, send next command
+                # Empty playlist, just send next command
                 sonos.next()
                 playing = {}
                 message = json.dumps({"Response": "Sent Next - Playlist Empty"})
@@ -446,7 +469,80 @@ class apihandler(BaseHTTPRequestHandler):
             message = json.dumps({"Response": "Added 1 Song"})
         # TODO
         # elif self.path == '/select/albums':
-        # elif self.path == '/browse':
+        elif self.path.startswith("/albumlist/"):
+            album_sel = self.path.split('/albumlist/')[1]
+            albums = []
+            for item in db_albums:
+                if album_sel != '' and (item[:len(album_sel)].lower() != album_sel.lower()):
+                    continue
+                for key in db_albums[item]:
+                    a = dict()
+                    a["key"] = key
+                    a["title"] = db[str(key)]["title"]
+                    a["thumbfile"] = db[str(key)]["thumbfile"]
+                    a["artist"] = db[str(key)]["artist"]
+                    a["added"] = db[str(key)]["added"]
+                    a["tracks"] = len(db[str(key)]["tracks"])
+                    albums.append(a)
+            message = json.dumps(albums)
+        elif self.path.startswith("/album/"):
+            album_id = self.path.split('/album/')[1]
+            if album_id.isdigit() and str(album_id) in db:
+                message = json.dumps(db[str(album_id)])
+            else:
+                message = json.dumps(None)
+        elif self.path == '/albums/recent':
+            # show last 50 recently added albums
+            albums = []
+            count = 0
+            for a in db_added:
+                count += 1
+                if count > 50:
+                    break
+                album_id = db_added[a]
+                album = db[str(album_id)]
+                album["key"] = album_id
+                albums.append(album)
+            message = json.dumps(albums)
+        elif self.path == '/albums/all':
+            # show all albums
+            albums = []
+            count = 0
+            for a in db_albums:
+                for album_id in db_albums[a]:
+                    album = db[str(album_id)]
+                    album["key"] = album_id
+                    albums.append(album)
+            message = json.dumps(albums)
+        elif self.path.startswith("/albumadd/"):
+            album_id = self.path.split('/albumadd/')[1]
+            if album_id.isdigit() and str(album_id) in db:
+                # Load album of songs into queue - from db
+                akey = db[str(album_id)]["key"]
+                count = 0
+                for item in db[str(album_id)]["tracks"]:
+                    song = {}
+                    s = db[str(album_id)]["tracks"][item]
+                    song['title'] = s["song"]
+                    song['artist'] = s['artist']
+                    song['length'] = s['length']
+                    song['album'] = db[str(album_id)]['title']
+                    song['albumartist'] = db[str(album_id)]['artist']
+                    song['path'] = "http://%s:%d%s" % (MEDIAHOST,
+                        MEDIAPORT, requests.utils.quote(s['path'][0]))
+                    album_art = None
+                    if akey and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, akey)):
+                        album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
+                            MEDIAPORT, akey)
+                    song['album_art'] = album_art
+                    song['akey'] = akey
+                    song['skey'] = s["key"]
+                    musicqueue.append(song)
+                    count += 1
+                message = json.dumps({"Response": "Added %d Songs" % count})
+
+            else:
+                message = json.dumps(None)     
         else:
             # Serve static assets from web root first, if found.
             fcontent, ftype = get_static(web_root, self.path)
@@ -594,6 +690,14 @@ if __name__ == "__main__":
         "\nTinySonos Web Based Sonos Controller and Jukebox [v%s - SoCo %s]\n"
         % (BUILD, soco.__version__)
     )
+
+    # try to load metabase
+    print("Loading song metabase...")
+    load_db()
+    if len(db) > 0:
+        print(" - DB Loaded: %d albums, %d songs, %d artists" % (len(db_albums), len(db_songs), len(db_artists)))
+    else:
+        print("No song metabase data.")
 
     # start threads
     print("Starting threads...")
