@@ -98,6 +98,7 @@ def export_songs(host, token, dest="."):
             tracks[index] = dict()
             tracks[index]["song"] = track.title
             tracks[index]["path"] = track.locations
+            tracks[index]["length"] = int(track.duration / 1000)
             key = track.key.split('metadata/')[1]
             tracks[index]["key"] = key
             artist = track.artist().title
