@@ -357,8 +357,7 @@ Credits:
                 for (let x in data.tracks) {
                     var length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19)
                     songlist = songlist +         
-                        "<li>" + data.tracks[x].song + " [" + length + "]</li>" ;
-                        // TODO: onclick for add data.tracks[x].key
+                        "<li><a href='#' onclick=\"javascript:myclick('addsong/" + encodeURI(data.tracks[x].key) +  "');\">" + data.tracks[x].song + " [" + length + "]</a></li>"
                 }
                 document.querySelector(id).innerHTML = songlist;
             });
