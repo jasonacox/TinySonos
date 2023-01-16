@@ -41,7 +41,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.13"
+BUILD = "0.0.15"
 
 # Defaults
 APIPORT = 8001
@@ -457,6 +457,32 @@ class apihandler(BaseHTTPRequestHandler):
                 song['skey'] = item['skey']
                 musicqueue.append(song)
             message = json.dumps({"Response": "Added {} Songs".format(len(songs))})
+        elif self.path.startswith('/addsong/'):
+            # Load single song into queue - key in URI
+            key = self.path.split('/addsong/')[1]
+            albumtracks = db[str(db_songkey[key][0])]['tracks']
+            for track in albumtracks:
+                if albumtracks[track]['key'] == key:
+                    item = albumtracks[track]
+                    break
+            print(item)
+            song = {}
+            song['id'] = item['key']
+            song['title'] = item['song']
+            song['artist'] = item['artist']
+            song['length'] = item['length']
+            song['album'] = db[str(db_songkey[key][0])]['title']
+            song['path'] = "http://%s:%d/%s" % (MEDIAHOST, 
+                MEDIAPORT, requests.utils.quote(item['path'][0]))
+            album_art = None
+            song['akey'] = db_songkey[key][0]
+            song['skey'] = key
+            if song['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, song['akey'])):
+                album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
+                    MEDIAPORT, song['akey'])
+            song['album_art'] = album_art
+            musicqueue.append(song)
+            message = json.dumps({"Response": "Added 1 Song"})
         elif self.path.startswith('/playfile/'):
             # Load single song into queue - file in URI
             # TODO: Add other details
@@ -502,6 +528,7 @@ class apihandler(BaseHTTPRequestHandler):
                 album_id = db_added[a]
                 album = db[str(album_id)]
                 album["key"] = album_id
+                album["songs"] = len(album["tracks"])
                 albums.append(album)
             message = json.dumps(albums)
         elif self.path == '/albums/all':
@@ -630,21 +657,28 @@ def jukebox():
         if zone != coordinator:
             # switch to new zone?
             coordinator = zone
-            print("Jukebox: switching to {} speakers".format(zone))
-            sonos = soco.SoCo(zone).group.coordinator
+            print(" - Jukebox: switching to {} speakers".format(zone))
+            try:
+                sonos = soco.SoCo(zone).group.coordinator
+            except:
+                print("Jukebox: ERROR setting sonos zone")
+                pass
         # Are there items in the queue?
         if len(musicqueue) > 0 and not stop:
-            # is it running?
-            state = sonos.get_current_transport_info()['current_transport_state']
-            print("STATE: Sonos {}".format(state), end="\r")
-            if state != "PLAYING":
-                # Queue up next song
-                playing = musicqueue.pop(0)
-                if repeat:
-                    musicqueue.append(playing)
-                # Play it
-                sonos.play_uri(playing['path'])
-                print("")
+            try:
+                # is it running?
+                state = sonos.get_current_transport_info()['current_transport_state']
+                # print("STATE: Sonos {}".format(state), end="\r")
+                if state != "PLAYING":
+                    # Queue up next song
+                    playing = musicqueue.pop(0)
+                    if repeat:
+                        musicqueue.append(playing)
+                    # Play it
+                    sonos.play_uri(playing['path'])
+                    print("")
+            except:
+                print("Jukebox: ERROR sending sonos commands")
         time.sleep(5)
 
 def api(port):
