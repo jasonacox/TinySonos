@@ -306,15 +306,38 @@ Credits:
     // Show Recent Albums 
     function showrecent() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/recent";
-        var rownum = 1
+        var thumbbase = window.location.protocol + "//" + window.location.hostname;
+        var rownum = 1;
+        var thumb = "";
         $.getJSON(pwurl, function(data) {
             // array of albums
             var output = "";
             for (let x in data) {
+                /*
                 output = output + "<li>" + 
                     "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
                     encodeURI(data[x].key) + "');\">" + 
-                    data[x].title + "</a></li>\n";
+                    data[x].title + " - " + data[x].artist + "</a></li>\n";
+                */
+                if(data[x].thumbfile) 
+                    thumb = thumbbase + ":54000" + data[x].thumbfile
+                else
+                    thumb = thumbbase + ":8001/notitle.png"
+                output = output + 
+                    "<div class='albumrow'>" +
+                        "<div class='albumthumb'>" +
+                            "<img style='vertical-align:middle;' height=45 width=45 style=\"albumthumb\" src=\"" + thumb + "\">" +
+                        "</div>" +
+                        "<div class='albumdetail'>" +
+                            "<div class='songline'>" + data[x].title + " - " + data[x].artist + "</div>" +
+                            "<div>" +
+                                "<button onclick=\"javascript:myclick('albumadd/" + encodeURI(data[x].key) +  "');\">Add All " + data[x].songs + " Songs</button> " + 
+                                "<button onclick=\"javascript:expandalbum('" + data[x].key + "');\">View Songs</button>" + 
+                            "</div> " +
+                            "<div class='songlist, songs" + data[x].key + "'>" + 
+                            "</div>" +
+                        "</div>" +
+                    "</div>\n";
                 rownum++;
             }
             document.querySelector(".menutitle").innerHTML = "Recently Added Albums";
@@ -323,6 +346,27 @@ Credits:
             clearmenu();
             document.getElementById("recent").style.fontWeight = "bold";
         });
+    }
+
+    function expandalbum(key) {
+        var id = ".songs" + key;
+        if (document.querySelector(id).innerHTML == "") {
+            var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/album/" + key;
+            $.getJSON(pwurl, function(data) {
+                var songlist = "";
+                for (let x in data.tracks) {
+                    var length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19)
+                    songlist = songlist +         
+                        "<li>" + data.tracks[x].song + " [" + length + "]</li>" ;
+                        // TODO: onclick for add data.tracks[x].key
+                }
+                document.querySelector(id).innerHTML = songlist;
+            });
+        }
+        else {
+            document.querySelector(id).innerHTML = "";
+        }
+
     }
 
     // Show Albums 
@@ -783,6 +827,39 @@ Credits:
         .active svg path {
             fill: #cc7e85;
         }
+
+        .albumrow {
+            text-align: middle;
+            margin: 5px;
+            /* height: 55px; */
+            width: 100%; 
+            float: left;
+            border-top-width: 1px;
+            border-top-color: lightgray;
+            border-top-style: solid;
+        }
+        /* left side of albumrow */
+        .albumthumb {
+            float: left;
+            flex: auto;
+            display: block;
+            padding: 3px;
+            padding-left: 4px;
+            padding-right: 7px;
+            width: 55px; 
+            height: 100%;
+        }
+        /* right side of albumrow */
+        .albumdetail {
+            float: left;
+            position: relative;
+            height: 100%;
+        }
+        .songline {
+            text-align: left;
+            overflow-wrap: break-word;
+        }
+
         </style>
 </head>
 
