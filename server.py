@@ -314,6 +314,10 @@ class apihandler(BaseHTTPRequestHandler):
             if 'album_art' in playing:
                 c['album_art2'] = playing['album_art']
             message = json.dumps(c)
+        elif self.path == '/location':
+            # Give location in song
+            c = sonos.get_current_track_info()
+            message = json.dumps(c)
         elif self.path == '/queuedepth':
             # Give Internal Stats
             message = json.dumps({"queuedepth": len(musicqueue)})
@@ -388,20 +392,13 @@ class apihandler(BaseHTTPRequestHandler):
                 playing = {}
                 message = json.dumps({"Response": "Sent Next - Playlist Empty"})
         elif self.path== '/prev':
-            if repeat and len(musicqueue) > 1:
-                   # Queue up next song
-                playing = musicqueue.pop
-                musicqueue.insert(0, song)
-                playing = musicqueue.pop
-                musicqueue.append(playing)
-                # Play it
+            if len(musicqueue) < 1:
+                # nothing in queue, just send prev command
+                sonos.previous()
+            else:
+                # replay current song
                 sonos.play_uri(playing['path'])
                 stop = False
-            else:
-                if len(musicqueue) <= 1:
-                    message = json.dumps({"Response": "Playlist Empty"})
-                else:
-                    sonos.previous()
         elif self.path=='/toggle/repeat':
             repeat = not repeat
         elif self.path=='/toggle/shuffle':
