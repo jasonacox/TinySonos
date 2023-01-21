@@ -51,6 +51,23 @@ Credits:
     }
 
     // Get Current Playing
+    function showprogress() {
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/location";
+        $.getJSON(pwurl, function(data) {
+            // current location and duration
+            document.querySelector("#current-time").innerHTML = data.position;
+            document.querySelector("#duration").innerHTML = data.duration;
+            // seek slider bar
+            console.log(data.position)
+            var a = data.position.split(':'); 
+            var a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
+            var b = data.duration.split(':'); 
+            var b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
+            document.querySelector("#seek-slider").value = 100 * a1/b1;
+        }); 
+    }
+
+    // Get Current Playing
     function showplaying() {
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
         $.getJSON(pwurl, function(data) {
@@ -67,12 +84,14 @@ Credits:
             if (data.title=='') {
                 document.querySelector(".title").innerHTML = xmltitle.childNodes[0].nodeValue;
             }
+
             // seek slider bar
             var a = data.position.split(':'); 
             var a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
             var b = data.duration.split(':'); 
             var b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
             document.querySelector("#seek-slider").value = 100 * a1/b1;
+
             // album art
             if(data.album_art2) {
                     if($("#album_art").attr("src")!=data.album_art2) {
@@ -94,16 +113,22 @@ Credits:
         }); 
     }
 
+    // Progress Bar Refresh
+    function refreshprogress() {
+        showprogress();
+        setTimeout(refreshprogress, 500);
+    }
+
     // Things to Refresh every 1s
     function refresh1s() {
-        showplaying()
-        queuedepth()
+        showplaying();
+        queuedepth();
         setTimeout(refresh1s, 1000);
     }
 
     // Things to Refresh every 5s
     function refresh5s() {
-        showstates()
+        showstates();
         setTimeout(refresh5s, 5000);
     }
 
@@ -127,7 +152,7 @@ Credits:
                 document.getElementById("pause").classList='play-pause';
                 document.getElementById("stop").classList='play-pause active';
             }
-            // console.log(pwurl);
+            // toggles
             if(data.shuffle) {
                 document.querySelector(".shuffleT").innerHTML = "YES";
                 document.getElementById("shuffle").classList='active';
