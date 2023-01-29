@@ -41,7 +41,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.17"
+BUILD = "0.0.18"
 
 # Defaults
 APIPORT = 8001
@@ -536,6 +536,7 @@ class apihandler(BaseHTTPRequestHandler):
                 for album_id in db_albums[a]:
                     album = db[str(album_id)]
                     album["key"] = album_id
+                    album["songs"] = len(album["tracks"])
                     albums.append(album)
             message = json.dumps(albums)
         elif self.path.startswith("/albumadd/"):
@@ -566,7 +567,9 @@ class apihandler(BaseHTTPRequestHandler):
                 message = json.dumps({"Response": "Added %d Songs" % count})
 
             else:
-                message = json.dumps(None)     
+                message = json.dumps(None)   
+        elif self.path == "/db":
+            message = json.dumps(db)  
         else:
             # Serve static assets from web root first, if found.
             fcontent, ftype = get_static(web_root, self.path)

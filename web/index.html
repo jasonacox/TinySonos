@@ -277,6 +277,23 @@ Credits:
         });
     }
 
+    // Highlight element
+    function highlight(element) {
+        let defaultBG = element.style.backgroundColor;
+        let defaultTransition = element.style.transition;
+
+        element.style.transition = "background 1s";
+        element.style.backgroundColor = "#FF47";
+
+        setTimeout(function()
+        {
+            element.style.backgroundColor = defaultBG;
+            setTimeout(function() {
+                element.style.transition = defaultTransition;
+            }, 1000);
+        }, 1000);
+    }
+
     // Alert
     function removeNotification() {
         $(".alert").hide(100);
@@ -393,25 +410,128 @@ Credits:
 
     }
 
+    function expandalbum2(key, row) {
+        var id = ".expand" + row;
+        var dataid = ".data" + row;
+        var albumid = ".album" + key;
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/album/" + key;
+        $.getJSON(pwurl, function(data) {
+            var songlist = "";
+            for (let x in data.tracks) {
+                var length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19)
+                songlist = songlist +         
+                    "<li><a href=\"#\" onclick=\"javascript:myclick('addsong/" + encodeURI(data.tracks[x].key) + 
+                            "');\">" + data.tracks[x].song + " [" + length + "]</a></li>";
+            }    
+
+            // clear old highlights if set
+            var ha = localStorage.getItem('highlight-albumid');
+            var hr = localStorage.getItem('highlight-rowid');
+            if (ha != albumid && ha != "") {
+                // unhighlight old album
+                document.querySelector(ha).style.backgroundColor = "";
+            }
+            if (hr != id && hr != "") {
+                // unhighlight old row
+                document.querySelector(hr).style.backgroundColor = "";
+                document.querySelector(hr).innerHTML = "";
+            }
+
+            // change content or toggle off if same
+            if (ha == albumid) {
+                document.querySelector(id).innerHTML = "";
+                document.querySelector(id).style.backgroundColor = "";
+                document.querySelector(albumid).style.backgroundColor = "";
+                document.querySelector(dataid).innerHTML = "";
+                localStorage.setItem('highlight-albumid', "");
+                localStorage.setItem('highlight-rowid', "");
+            }
+            else {
+                document.querySelector(id).innerHTML = songlist;
+                document.querySelector(albumid).style.backgroundColor = "#FF47";
+                document.querySelector(id).style.backgroundColor = "#FF47";
+                var z = document.querySelector(dataid).innerHTML;
+                if (z != "") {
+                    document.querySelector(z).style.backgroundColor = "";
+                }
+                document.querySelector(dataid).innerHTML = albumid;
+                localStorage.setItem('highlight-albumid', albumid);
+                localStorage.setItem('highlight-rowid', id);
+            }
+        });
+    }
+
     // Show Albums 
-    function showalbums() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/all";
-        var rownum = 1
+    function showalbums(scope) {
+        // var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/all";
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/" + scope;
+        var thumbbase = window.location.protocol + "//" + window.location.hostname;
+        var thumb = "";
         $.getJSON(pwurl, function(data) {
             // array of albums
             var output = "";
+            var col = 0;
+            var row = 0;
+            // show all album tiles
             for (let x in data) {
-                output = output + "<li>" + 
-                    "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
-                    encodeURI(data[x].key) + "');\">" + 
-                    data[x].title + "</a></li>\n";
-                rownum++;
+                if(data[x].thumbfile) 
+                    thumb = thumbbase + ":54000" + data[x].thumbfile
+                else
+                    thumb = thumbbase + ":8001/notitle.png"
+                col += 1;
+                if (col == 1) {
+                    output = output + "<div class=\"arow rowid" + row.toString() + "\">\n";
+                }
+                output = output + 
+                    "<div class=\"album-card album" + data[x].key+ "\">" +
+                        "<div class=\"album-thumb\">" +
+                            "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
+                                encodeURI(data[x].key) + "');\">" +
+                                "<img class=\"album-img\" src=\"" + thumb + "\">" +
+                            "</a>\n" +
+                        "</div>" +
+                        "<div class=\"album-text\">" +
+                            "<div class=\"atitle\">" +
+                                "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
+                                encodeURI(data[x].key) + "');\">" + data[x].title + 
+                                "</a>\n" +
+                            "</div>" +
+                            "<div class=\"asubtitle\">" +
+                                data[x].artist + "<br>" +
+                                "<a href=\"#rowid" + row.toString() + "\" onclick=\"javascript:expandalbum2(" + data[x].key + "," + 
+                                    row.toString() + ");\">"  + "[" + data[x].songs + " Songs]" + 
+                                "</a>\n" +
+                            "</div>" +
+                        "</div>" +
+                    "</div>\n";
+
+                if (col >= 4) {
+                    output = output + "</div>\n" +
+                        "<div class=\"album-expand expand" + row.toString() + "\">" + 
+                        "</div>" +
+                        "<div hidden class =\"data" + row.toString() + "\"></div>";
+                    col = 0;
+                    row += 1;
+                }
             }
-            document.querySelector(".menutitle").innerHTML = "Albums";
-            document.querySelector(".menunumber").innerHTML = rownum-1;
+            output = output + "</div>\n" +
+                "<div class=\"album-expand expand" + row.toString() + "\">" + 
+                "</div>" +
+                "<div hidden class =\"data" + row.toString() + "\"></div>";
+            
+            
+            document.querySelector(".menunumber").innerHTML = row-1;
             document.querySelector(".menucontent").innerHTML = output;
             clearmenu();
-            document.getElementById("albums").style.fontWeight = "bold";
+            if (scope == "recent") {
+                document.getElementById("recent").style.fontWeight = "bold";
+                document.querySelector(".menutitle").innerHTML = "Recent Albums";
+            }
+            else {
+                document.getElementById("albums").style.fontWeight = "bold";
+                document.querySelector(".menutitle").innerHTML = "All Albums";
+            }
+
         });
     }
 
@@ -884,6 +1004,75 @@ Credits:
             overflow-wrap: break-word;
         }
 
+        /* album styles */
+        .arow {
+            display: flex;
+            flex-direction: row;
+        }
+
+        .album-card {
+            flex: 0 0 auto;
+            -webkit-border-radius: 2px;
+            border-radius: 2px;
+            -webkit-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            background: #fff;
+            height: 100%;
+            position: relative;
+            text-decoration: none;
+            vertical-align: top;
+            width: 120px;
+            margin: 5px;
+        }
+
+        .album-expand {
+            /* background: #FF47; */
+            padding: 2px 20px 0;
+        }
+
+        .album-text {
+            -webkit-box-sizing: border-box;
+            box-sizing: border-box;
+            display: block;
+            overflow: hidden;
+            padding: 7px 10px 0;
+            position: relative;
+        }
+
+        .album-thumb {
+            height: 120px;
+            background: grey;
+        }
+
+        .album-img {
+            height: 120px;
+            width: 120px;
+        }
+
+        .atitle {
+            color: #212121;
+            display: block;
+            font-size: 16px;
+            line-height: 18px;
+            max-height: 36px;
+            min-height: 18px;
+            overflow: hidden;
+            text-decoration: none;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .asubtitle {
+            color: #616161;
+            display: inline-block;
+            font-size: 13px;
+            line-height: 16px;
+            margin: 1px 0;
+            max-width: 132px;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
         </style>
 </head>
 
@@ -995,8 +1184,8 @@ Credits:
                 <div class="menu-row">
                     <div class="menu-left">
                         <p id="playlists"><a href="#" onclick="javascript:showplaylists();">Playlists</a></p>
-                        <p id="recent"><a href="#" onclick="javascript:showrecent();">Recent</a></p>
-                        <p id="albums"><a href="#" onclick="javascript:showalbums();">Albums</a></p>
+                        <p id="recent"><a href="#" onclick="javascript:showalbums('recent');">Recent</a></p>
+                        <p id="albums"><a href="#" onclick="javascript:showalbums('all');">Albums</a></p>
                         <p id="artists"><a href="#" onclick="javascript:showartists();">Artists</a></p>
                         <p id="songs"><a href="#" onclick="javascript:showsongs();">Songs</a></p>
                         <p id="search"><a href="#" onclick="javascript:showsearch();">Search</a></p>
@@ -1016,10 +1205,17 @@ Credits:
         <b class="alerttext">This is an alert</b>
     </div>
 
-
+    <div hidden="true" class="highlight-albumid">
+    </div>
+    <div hidden="true" class="highlight-rowid">
+    </div>
 
     <script>
 
+    // Setup local variables
+    localStorage.setItem('highlight-albumid', "");
+    localStorage.setItem('highlight-rowid', "");
+                
     // Display
     showversion();
     showplaylists();
