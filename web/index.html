@@ -497,14 +497,14 @@ Credits:
                 output = output + 
                     "<div class=\"album-card album" + data[x].key+  "\">" +
                         "<div class=\"album-thumb\">" +
-                            "<a href=\"#\" onclick=\"javascript:expandalbum2(" +
+                            "<a href=\"#rowid" + row.toString() + "\" onclick=\"javascript:expandalbum2(" +
                                 data[x].key + "," + row.toString() + ");\">" +
                                 "<img class=\"album-img\" src=\"" + thumb + "\">" +
                             "</a>\n" +
                         "</div>" +
                         "<div class=\"album-text\">" +
                             "<div class=\"atitle\">" +
-                                "<a href=\"#\" onclick=\"javascjavascript:expandalbum2(" +
+                                "<a href=\"#rowid" + row.toString() + "\" onclick=\"javascjavascript:expandalbum2(" +
                                 data[x].key +  "," + row.toString() + ");\">" + data[x].title + 
                                 "</a>\n" +
                             "</div>" +
