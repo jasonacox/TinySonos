@@ -41,7 +41,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.18"
+BUILD = "0.0.19"
 
 # Defaults
 APIPORT = 8001

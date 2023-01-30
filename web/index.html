@@ -416,7 +416,9 @@ Credits:
         var albumid = ".album" + key;
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/album/" + key;
         $.getJSON(pwurl, function(data) {
-            var songlist = "";
+            var songlist = "<span class=\"atitle\">" + data.title + "</span>" +
+                "<span class=\"asubtitle\">" + data.artist + "</span><br>" +
+                "<button onclick=\"javascript:myclick('albumadd/" + encodeURI(key) +  "');\">Add All</button><br>"
             for (let x in data.tracks) {
                 var length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19)
                 songlist = songlist +         
@@ -430,6 +432,9 @@ Credits:
             if (ha != albumid && ha != "") {
                 // unhighlight old album
                 document.querySelector(ha).style.backgroundColor = "";
+                document.querySelector(ha).style.height = "";
+                document.querySelector(ha).style.marginBottom = "";
+                document.querySelector(ha).style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
             }
             if (hr != id && hr != "") {
                 // unhighlight old row
@@ -437,11 +442,15 @@ Credits:
                 document.querySelector(hr).innerHTML = "";
             }
 
+            //console.log(document.querySelector(albumid).style.borderColor);
             // change content or toggle off if same
             if (ha == albumid) {
                 document.querySelector(id).innerHTML = "";
                 document.querySelector(id).style.backgroundColor = "";
                 document.querySelector(albumid).style.backgroundColor = "";
+                document.querySelector(albumid).style.height = "";
+                document.querySelector(albumid).style.marginBottom = "";
+                document.querySelector(albumid).style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
                 document.querySelector(dataid).innerHTML = "";
                 localStorage.setItem('highlight-albumid', "");
                 localStorage.setItem('highlight-rowid', "");
@@ -449,6 +458,9 @@ Credits:
             else {
                 document.querySelector(id).innerHTML = songlist;
                 document.querySelector(albumid).style.backgroundColor = "#FF47";
+                document.querySelector(albumid).style.height = "190px";
+                document.querySelector(albumid).style.marginBottom = "0px";
+                document.querySelector(albumid).style.boxShadow = "0 0 0";
                 document.querySelector(id).style.backgroundColor = "#FF47";
                 var z = document.querySelector(dataid).innerHTML;
                 if (z != "") {
@@ -1012,26 +1024,26 @@ Credits:
 
         .album-card {
             flex: 0 0 auto;
-            -webkit-border-radius: 2px;
             border-radius: 2px;
-            -webkit-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             background: #fff;
             height: 100%;
             position: relative;
             text-decoration: none;
             vertical-align: top;
-            width: 120px;
+            width: 115px;
             margin: 5px;
         }
 
         .album-expand {
             /* background: #FF47; */
-            padding: 2px 20px 0;
+            border-bottom-right-radius: 10px;
+            border-bottom-left-radius: 10px;
+            padding: 10px 20px 0;
+            margin-left: 5px;
         }
 
         .album-text {
-            -webkit-box-sizing: border-box;
             box-sizing: border-box;
             display: block;
             overflow: hidden;
@@ -1040,13 +1052,13 @@ Credits:
         }
 
         .album-thumb {
-            height: 120px;
+            height: 115px;
             background: grey;
         }
 
         .album-img {
-            height: 120px;
-            width: 120px;
+            height: 115px;
+            width: 115px;
         }
 
         .atitle {
