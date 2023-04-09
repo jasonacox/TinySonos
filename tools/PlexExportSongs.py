@@ -85,7 +85,10 @@ def export_songs(host, token, dest="."):
             db[uid]["thumbfile"] = None
         db[uid]["artist"] = album.artist().title
         db[uid]["added"] = album.addedAt.timestamp()
-        idx_added[album.addedAt.timestamp()] = uid
+        ts = album.addedAt.timestamp()
+        while ts in idx_added:
+            ts = ts + 1
+        idx_added[ts] = uid
         index = 0
         indexarray = [0]
         tracks = dict()
