@@ -41,7 +41,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.19"
+BUILD = "0.0.20"
 
 # Defaults
 APIPORT = 8001
@@ -86,6 +86,8 @@ CTMAP = {
 
 # Logging
 log = logging.getLogger(__name__)
+logging.basicConfig(format='%(levelname)s:%(message)s',level=logging.INFO)
+log.setLevel(logging.INFO)
 
 # Global Stats
 serverstats = {}
@@ -114,6 +116,7 @@ db_albums = {}
 db_artists = {}
 db_songs = {}
 db_songkey = {}
+db_filetime = 0
 
 # Global Variables
 running = True
@@ -149,7 +152,7 @@ def get_static(web_root, fpath):
             ftype = CTMAP[ext]
         else:
             ftype = 'text/plain'
-        print("MEDIA: url = {} contenttype = {}".format(fpath,ftype))
+        log.debug("MEDIA: url = {} contenttype = {}".format(fpath,ftype))
         with open(freq, 'rb') as f:
             return f.read(), ftype
     return None, None
@@ -164,22 +167,27 @@ def detect_ip_address():
 
 def load_db():
     """ Load database and index """
-    global db, db_added, db_albums, db_artists, db_songs, db_songkey
+    global db, db_added, db_albums, db_artists, db_songs, db_songkey, db_filetime
     try:
-        f = open("%s/db.json" % MEDIAPATH)
-        db = json.load(f)
-        f = open("%s/db.added.json" % MEDIAPATH)
-        db_added = json.load(f)
-        f = open("%s/db.albums.json" % MEDIAPATH)
-        db_albums = json.load(f)
-        f = open("%s/db.artists.json" % MEDIAPATH)
-        db_artists = json.load(f)
-        f = open("%s/db.songs.json" % MEDIAPATH)
-        db_songs = json.load(f)
-        f = open("%s/db.songkey.json" % MEDIAPATH)
-        db_songkey = json.load(f)
+        filetime = os.path.getmtime("%s/db.json" % MEDIAPATH)
+        if filetime > db_filetime:
+            log.info("Loading song metabase")
+            db_filetime = filetime
+            f = open("%s/db.json" % MEDIAPATH)
+            db = json.load(f)
+            f = open("%s/db.added.json" % MEDIAPATH)
+            db_added = json.load(f)
+            f = open("%s/db.albums.json" % MEDIAPATH)
+            db_albums = json.load(f)
+            f = open("%s/db.artists.json" % MEDIAPATH)
+            db_artists = json.load(f)
+            f = open("%s/db.songs.json" % MEDIAPATH)
+            db_songs = json.load(f)
+            f = open("%s/db.songkey.json" % MEDIAPATH)
+            db_songkey = json.load(f)
+            log.info("DB Loaded: %d albums, %d songs, %d artists" % (len(db_albums), len(db_songs), len(db_artists)))
     except:
-        pass
+        log.info("Error loading song metabase data.")
 
 # Determine my Hostname
 if MEDIAHOST is None:
@@ -272,15 +280,15 @@ class mediahandler(RangeRequestHandler):
         return host
 
     def do_GET(self):
-        print("GET - Path = {}".format(self.path))
+        log.debug("GET - Path = {}".format(self.path))
         #self.path = requests.utils.unquote(self.path.replace(DROPPREFIX, MEDIAPATH))
         self.path = self.path.replace(DROPPREFIX, "")
-        print("    - converted Path = {}".format(self.path))
+        log.debug("    - converted Path = {}".format(self.path))
         try:
             super().do_GET()
         except Exception as e:
             # It's normal to hit some exceptions with Sonos
-            print("Exception ignored: {}".format(e))
+            log.debug("Exception ignored: {}".format(e))
 
 ## API Server Handler
 
@@ -301,7 +309,7 @@ class apihandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         global musicqueue, zone, sonos, shuffle, repeat, state, stop, playing
-        global db, db_added, db_albums, db_artists, db_songs, db_songkey
+        global db, db_added, db_albums, db_artists, db_songs, db_songkey, db_filetime
         self.send_response(200)
         message = json.dumps({"Response": "OK"})
         contenttype = 'application/json'
@@ -462,7 +470,7 @@ class apihandler(BaseHTTPRequestHandler):
                 if albumtracks[track]['key'] == key:
                     item = albumtracks[track]
                     break
-            print(item)
+            log.debug(item)
             song = {}
             song['id'] = item['key']
             song['title'] = item['song']
@@ -486,7 +494,7 @@ class apihandler(BaseHTTPRequestHandler):
             playfile = self.path.split('/playfile/')[1]
             song = {}
             #fn = requests.utils.unquote(self.path.split('/play_file/')[1])
-            print("Add PlayFile: {}".format(playfile))
+            log.debug("Add PlayFile: {}".format(playfile))
             song['path'] = "http://%s:%d/%s" % (MEDIAHOST, MEDIAPORT, playfile)
             musicqueue.append(song)
             message = json.dumps({"Response": "Added 1 Song"})
@@ -570,7 +578,13 @@ class apihandler(BaseHTTPRequestHandler):
                 message = json.dumps(None)   
         elif self.path == "/db":
             message = json.dumps(db)  
+        elif self.path == "/loaddb":
+            db_filetime = 0
+            load_db()
+            message = json.dumps({"Response": "DB Loaded: %d albums, %d songs, %d artists" % (len(db_albums), len(db_songs), len(db_artists))})
         else:
+            # First check to see of song metabase has changed and load
+            load_db()
             # Serve static assets from web root first, if found.
             fcontent, ftype = get_static(web_root, self.path)
             if fcontent:
@@ -581,7 +595,7 @@ class apihandler(BaseHTTPRequestHandler):
                 return
             else:
                 message = "404 Error"
-                print(self.path)
+                log.debug("404 Error: ",self.path)
 
         # Counts 
         if "Error" in message:
@@ -620,7 +634,7 @@ def sonoslisten():
         if zone != coordinator:
             # switch to new zone?
             coordinator = zone
-            print("SonosListen: switching to {} speakers".format(zone))
+            log.debug("SonosListen: switching to {} speakers".format(zone))
             device = soco.SoCo(zone).group.coordinator
             sub = device.renderingControl.subscribe()
             sub2 = device.avTransport.subscribe()
@@ -657,11 +671,11 @@ def jukebox():
         if zone != coordinator:
             # switch to new zone?
             coordinator = zone
-            print(" - Jukebox: switching to {} speakers".format(zone))
+            log.debug("Jukebox: switching to {} speakers".format(zone))
             try:
                 sonos = soco.SoCo(zone).group.coordinator
             except:
-                print("Jukebox: ERROR setting sonos zone")
+                log.debug("Jukebox: ERROR setting sonos zone")
                 pass
         # Are there items in the queue?
         if len(musicqueue) > 0 and not stop:
@@ -676,9 +690,9 @@ def jukebox():
                         musicqueue.append(playing)
                     # Play it
                     sonos.play_uri(playing['path'])
-                    print("")
+                    log.debug("Play", playing['path'])
             except:
-                print("Jukebox: ERROR sending sonos commands")
+                log.debug("Jukebox: ERROR sending sonos commands")
         time.sleep(5)
 
 def api(port):
@@ -686,7 +700,7 @@ def api(port):
     API Server - Thread to listen for commands on port 
     """
     global running
-    log.debug("Started API server thread on %d", port)
+    log.info("Started API server thread on %d", port)
 
     with ThreadingHTTPServer(('', port), apihandler) as server:
         try:
@@ -694,15 +708,15 @@ def api(port):
             while running:
                 server.handle_request()
         except:
-            print(' CANCEL \n')
-    print('\napi Exit')
+            log.debug('CANCEL')
+    log.info('api Exit')
 
 def media(port):
     """
     Media Server - Thread to listening for requests 
     """
     global running
-    log.debug("Started Media server thread on %d", port)
+    log.info("Started Media server thread on %d", port)
 
     with ThreadingHTTPServer(('', port), mediahandler) as server:
         try:
@@ -710,8 +724,8 @@ def media(port):
             while running:
                 server.handle_request()
         except:
-            print(' CANCEL \n')
-    print('\nmedia Exit')
+            log.debug('CANCEL')
+    log.info('media Exit')
 
 # MAIN Thread
 if __name__ == "__main__":
@@ -720,27 +734,21 @@ if __name__ == "__main__":
     mediaServer = threading.Thread(target=media, args=(MEDIAPORT,))
     jb = threading.Thread(target=jukebox)
     
-    print(
-        "\nTinySonos Web Based Sonos Controller and Jukebox [v%s - SoCo %s]\n"
+    log.info(
+        "TinySonos [v%s - SoCo %s] - Web Based Sonos Controller and Jukebox"
         % (BUILD, soco.__version__)
     )
 
     # try to load metabase
-    print("Loading song metabase...")
     load_db()
-    if len(db) > 0:
-        print(" - DB Loaded: %d albums, %d songs, %d artists" % (len(db_albums), len(db_songs), len(db_artists)))
-    else:
-        print("No song metabase data.")
 
     # start threads
-    print("Starting threads...")
     apiServer.start()
     mediaServer.start()
     jb.start()
 
-    print(" - API Endpoint on http://%s:%d" % (MEDIAHOST, APIPORT))
-    print(" - Media Endpoint on http://%s:%d" % (MEDIAHOST, MEDIAPORT))
+    log.info(" - API Endpoint on http://%s:%d" % (MEDIAHOST, APIPORT))
+    log.info(" - Media Endpoint on http://%s:%d" % (MEDIAHOST, MEDIAPORT))
 
     try:
         while(True):
@@ -750,7 +758,7 @@ if __name__ == "__main__":
         # Close down threads
         requests.get("http://%s:%d/stopthread" % (MEDIAHOST, APIPORT))
         requests.get("http://%s:%d/stopthread" % (MEDIAHOST, MEDIAPORT))
-        print("End")
+        log.info("End")
 
     # threads completely executed
-    print("Done!")
+    log.info("Done!")
