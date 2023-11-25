@@ -25,7 +25,7 @@ body::before {
     left: 0;
     width: 100%;
     min-height: 100%;
-    filter: blur(25px);
+    filter: blur(75px);
     opacity: 0.5;
     z-index: -1;
 }
@@ -517,3 +517,10 @@ input[type="range"]:active::-ms-thumb {
     white-space: nowrap;
 }
 
+.vol-slider {
+    width: 150px !important;
+}
+
+.slider-container {
+    text-align: left;
+}

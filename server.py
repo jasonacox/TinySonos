@@ -14,6 +14,7 @@ Description
     compatible media file server on TCP 54000.  
 
     Setup - edit defaults below or send as environmental variables
+    Install - pip3 install soco rangehttpserver
     Run - python3 server.py
     Test - http://localhost:8001
 
@@ -41,7 +42,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.21"
+BUILD = "0.0.23"
 
 # Defaults
 APIPORT = 8001
@@ -358,9 +359,31 @@ class apihandler(BaseHTTPRequestHandler):
             ip, updown = self.path.split('/speaker_vol/')[1].split('/')
             if updown == "up":
                 vol = soco.SoCo(ip).volume + 1
-            else:
+            elif updown == "down":
                 vol = soco.SoCo(ip).volume - 1
-            soco.SoCo(ip).ramp_to_volume(int(vol))
+            elif updown == "mute":
+                vol = 0
+            elif updown.isdigit():
+                vol = int(updown)
+            else:
+                vol = soco.SoCo(ip).volume
+            #soco.SoCo(ip).ramp_to_volume(int(vol))
+            soco.SoCo(ip).volume = int(vol)
+            message = "OK"
+        elif self.path.startswith('/volume/'):
+            # Set volume for a specific group
+            updown = self.path.split('/volume/')[1].split('/')[0]
+            if updown == "up":
+                vol = sonos.group.volume + 1
+            elif updown == "down":
+                vol = sonos.group.volume - 1
+            elif updown == "mute":
+                vol = 0
+            elif updown.isdigit():
+                vol = int(updown)
+            else:
+                vol = sonos.group.volume 
+            sonos.group.volume = vol
             message = "OK"
         elif self.path.startswith('/setzone/'):
             zone = self.path.split('/setzone/')[1]
