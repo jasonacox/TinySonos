@@ -194,7 +194,7 @@ Credits:
     }
 
     // Update Volume UI
-    function updatevolume() {
+    function updatevolumeold() {
         // Speaker and volume update
         var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
         $.getJSON(pwurl, function(data) {
@@ -228,6 +228,37 @@ Credits:
             document.querySelector(".speakers").innerHTML = text;
         });
     }
+
+    // Update Volume UI
+    function updatevolume() {
+    // Speaker and volume update
+    var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
+    $.getJSON(pwurl, function(data) {
+        var table = "<table style='margin-left: 10px;'>";
+        for (let x in data) {
+            var coord = data[x].coordinator ? '*' : ' ';
+            var joined = data[x].state ? "[X]" : "[ ]";
+            var addr = '"' + data[x].ip + '"';
+
+            table += "<tr>";
+            table += "<td><a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + x + "</a></td>";
+            table += "<td>" + joined + "</td>";
+            table += "<td>" + coord + "</td>";
+            table += "<td>Volume:</td>";
+            table += "<td><a href=\"#\" onclick='updateVolume1(0," + addr + ")'>Mute</a></td>";
+            table += "<td><label for='volume-slider-" + data[x].ip + "'></label></td>";
+            table += "<td><input type='range' id='volume-slider-" + data[x].ip + "' class='vol-slider' min='0' max='50' value='" + data[x].volume + "' step='1' oninput='updateVolumeDisplay1(this.value," + addr + ")' onchange='updateVolume1(this.value," + addr + ")'></td>";
+            table += "<td><span id='volume-" + data[x].ip + "'>" + data[x].volume + "</span></td>";
+            table += "<td><button onclick='updateVolumeclick(+1," + addr + ")'>Up</button></td>"; // Up button
+            table += "<td><button onclick='updateVolumeclick(-1," + addr + ")'>Down</button></td>"; // Down button
+            table += "</tr>";
+        }
+        table += "</table>";
+
+        document.querySelector(".speakers").innerHTML = table;
+    });
+}
+
 
     // Clear bold items in menu
     function clearmenu() {
@@ -647,6 +678,15 @@ Credits:
         const volumeValue = document.getElementById('volume-' + ip);
         volumeValue.textContent = value;
     }
+    function updateVolumeclick(delta, ip) {
+        var newvalue = parseInt(document.getElementById('volume-slider-' + ip).value) + parseInt(delta)
+        document.getElementById('volume-' + ip).textContent = newvalue;
+        document.getElementById('volume-slider-' + ip).value = newvalue;
+        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001//speaker_vol/" + ip + "/" + newvalue;
+        $.getJSON(pwurl, function(data) {
+            console.log(data);
+        });
+    }
     </script>
 </head>
 
@@ -740,7 +780,7 @@ Credits:
             <div class="sonostitle">Sonos</div>
             <div class="system">
                 <div id="volume-container">
-                    <label for="volume-slider">Speakers - System Volume [<a href="#" onclick="javascript:myclick('volume/mute');"> Mute </a>]:</label>
+                    <label for="volume-slider">Speakers - Main Volume [<a href="#" onclick="javascript:myclick('volume/mute');"> Mute </a>]:</label>
                     <input type="range" id="volume-slider" class="vol-slider" min="0" max="50" value="0" step="1" oninput="updateVolumeDisplay(this.value)" onchange="updateVolume(this.value)">
                     <span id="volume">0</span>
                 </div>

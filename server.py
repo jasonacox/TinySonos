@@ -14,7 +14,7 @@ Description
     compatible media file server on TCP 54000.  
 
     Setup - edit defaults below or send as environmental variables
-    Install - pip3 install soco rangehttpserver
+    Install - pip3 install requests soco rangehttpserver
     Run - python3 server.py
     Test - http://localhost:8001
 
@@ -42,7 +42,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.23"
+BUILD = "0.0.24"
 
 # Defaults
 APIPORT = 8001
@@ -635,8 +635,14 @@ class apihandler(BaseHTTPRequestHandler):
         self.send_header('Content-type',contenttype)
         self.send_header('Content-Length', str(len(message)))
         self.end_headers()
-        self.wfile.write(bytes(message, "utf8"))
-
+        try:
+            # try to send payload
+            self.wfile.write(bytes(message, "utf8"))
+        except Exception as e:
+            # if it fails, log error and continue
+            log.debug("Error sending payload: {}".format(e))
+            pass
+        
 # Threads
 
 def sonoslisten():
