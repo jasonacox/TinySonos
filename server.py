@@ -42,7 +42,7 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.24"
+BUILD = "0.0.26"
 
 # Defaults
 APIPORT = 8001
@@ -354,6 +354,25 @@ class apihandler(BaseHTTPRequestHandler):
                 speakers[z.player_name]["state"] = member
                 speakers[z.player_name]["volume"] = z.volume
             message = json.dumps(speakers)
+        elif self.path.startswith('/speaker_join/'):
+            # Join a speaker to the coordinator's group
+            ip = self.path.split('/speaker_join/')[1]
+            try:
+                coordinator = soco.SoCo(zone).group.coordinator
+                speaker = soco.SoCo(ip)
+                speaker.join(coordinator)
+                message = json.dumps({"Response": "Speaker joined group"})
+            except Exception as e:
+                message = json.dumps({"Response": "Error: {}".format(str(e))})
+        elif self.path.startswith('/speaker_unjoin/'):
+            # Remove a speaker from the group
+            ip = self.path.split('/speaker_unjoin/')[1]
+            try:
+                speaker = soco.SoCo(ip)
+                speaker.unjoin()
+                message = json.dumps({"Response": "Speaker left group"})
+            except Exception as e:
+                message = json.dumps({"Response": "Error: {}".format(str(e))})
         elif self.path.startswith('/speaker_vol/'):
             # Set volume for a specific group
             ip, updown = self.path.split('/speaker_vol/')[1].split('/')

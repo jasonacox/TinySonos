@@ -239,10 +239,12 @@ Credits:
             var coord = data[x].coordinator ? '*' : ' ';
             var joined = data[x].state ? "[X]" : "[ ]";
             var addr = '"' + data[x].ip + '"';
+            var joinAction = data[x].state ? "speaker_unjoin" : "speaker_join";
+            var joinText = data[x].state ? "Leave" : "Join";
 
             table += "<tr>";
             table += "<td><a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + x + "</a></td>";
-            table += "<td>" + joined + "</td>";
+            table += "<td><a href=\"#\" onclick=\"javascript:toggleSpeaker('" + joinAction + "'," + addr + ");\" title='Click to " + joinText + " group'>" + joined + "</a></td>";
             table += "<td>" + coord + "</td>";
             table += "<td>Volume:</td>";
             table += "<td><a href=\"#\" onclick='updateVolume1(0," + addr + ")'>Mute</a></td>";
@@ -686,6 +688,15 @@ Credits:
         $.getJSON(pwurl, function(data) {
             console.log(data);
         });
+    }
+    function toggleSpeaker(action, ip) {
+        var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + action + "/" + ip;
+        console.log(clickurl)
+        $.get(clickurl, function(data) {
+            displayNotification("Response: " + data.Response)
+            // Refresh speaker list immediately
+            setTimeout(updatevolume, 500);
+        });   
     }
     </script>
 </head>
