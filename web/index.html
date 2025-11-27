@@ -18,61 +18,75 @@ Credits:
 -->
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="notitle.png">
     <link rel="stylesheet" type="text/css" href="style.css">
     <title>TinySonos API Server</title>
-    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script>
     // Globals
-    var lastnumq = 0;  // last number of songs in queue
-    var lastzone = 0;  // last speaker zone used
+    let lastnumq = 0;  // last number of songs in queue
+    let lastzone = 0;  // last speaker zone used
+
+    // API Configuration
+    const getApiUrl = (endpoint) => {
+        return `${window.location.protocol}//${window.location.hostname}:8001/${endpoint}`;
+    };
+
+    const getMediaUrl = (path) => {
+        return `${window.location.protocol}//${window.location.hostname}:54000${path}`;
+    };
+
+    // Error handling helper
+    const handleApiError = (error, context = 'API call') => {
+        console.error(`${context} failed:`, error);
+        displayNotification(`Error: ${context} failed`);
+    };
 
     // Fast and simple DOM update
     function _updateHTML(element, html) {
-        var e = document.querySelector(element);
+        const e = document.querySelector(element);
         e.innerHTML = html;
     }
     function _updateVAL(element, val) {
-        var e = document.querySelector(element);
+        const e = document.querySelector(element);
         e.value = val;
     }
 
     // Get Version
     function showversion() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/stats";
-        $.getJSON(pwurl, function(data) {
-            var text = `TinySonos Server v${data.tinysonos} [soco v${data.soco}]`;
+        $.getJSON(getApiUrl('stats'), function(data) {
+            const text = `TinySonos Server v${data.tinysonos} [soco v${data.soco}]`;
             $(".sonostitle").html(text);
-        });
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/sonos";
-        $.getJSON(pwurl, function(data) {
-            var text = `Sonos: ${data.household_id} ${data.uid}`;
+        }).fail(() => handleApiError(new Error(), 'Get stats'));
+        
+        $.getJSON(getApiUrl('sonos'), function(data) {
+            const text = `Sonos: ${data.household_id} ${data.uid}`;
             $(".sonos").html(text);
-        });
+        }).fail(() => handleApiError(new Error(), 'Get sonos info'));
+        
         setTimeout(showversion, 60000);
     }
 
     // Get Current Playing
     function showprogress() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/location";
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl('location'), function(data) {
             // current location and duration
             document.querySelector("#current-time").innerHTML = data.position;
             document.querySelector("#duration").innerHTML = data.duration;
             // seek slider bar
-            console.log(data.position)
-            var a = data.position.split(':'); 
-            var a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
-            var b = data.duration.split(':'); 
-            var b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
+            const a = data.position.split(':'); 
+            const a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
+            const b = data.duration.split(':'); 
+            const b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
             document.querySelector("#seek-slider").value = 100 * a1/b1;
-        }); 
+        }).fail(() => handleApiError(new Error(), 'Get progress')); 
     }
 
     // Get Current Playing
     function showplaying() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/current";
-        $.getJSON(pwurl, function(data) {
-            //var text = `${data.state}: ${data.title} - ${data.artist} - ${data.album} - ${data.position}/${data.duration} ` 
+        $.getJSON(getApiUrl('current'), function(data) {
             document.querySelector(".title").innerHTML = data.title;
             document.querySelector(".artist").innerHTML = data.artist;
             document.querySelector(".album").innerHTML = data.album;
@@ -80,25 +94,24 @@ Credits:
             document.querySelector("#duration").innerHTML = data.duration;
 
             // pull title from XML metadata if not existing
-            xml = $.parseXML(data.metadata)
-            var xmltitle = xml.getElementsByTagName("dc:title")[0];
+            const xml = $.parseXML(data.metadata);
+            const xmltitle = xml.getElementsByTagName("dc:title")[0];
             if (data.title=='') {
                 document.querySelector(".title").innerHTML = xmltitle.childNodes[0].nodeValue;
             }
 
             // seek slider bar
-            var a = data.position.split(':'); 
-            var a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
-            var b = data.duration.split(':'); 
-            var b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
+            const a = data.position.split(':'); 
+            const a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
+            const b = data.duration.split(':'); 
+            const b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
             document.querySelector("#seek-slider").value = 100 * a1/b1;
 
             // album art
             if(data.album_art2) {
                     if($("#album_art").attr("src")!=data.album_art2) {
                         document.querySelector('#album_art').setAttribute('src', data.album_art2);
-                        // document.body.style.backgroundImage = "url(" + data.album_art2 + ")";
-                        var styleElem = document.head.appendChild(document.createElement("style"));
+                        const styleElem = document.head.appendChild(document.createElement("style"));
                         styleElem.innerHTML = "body::before {background: url(" + data.album_art2 + ");}";
                     }
                 } 
@@ -106,21 +119,19 @@ Credits:
                 if(data.album_art) {
                     if($("#album_art").attr("src")!=data.album_art) {
                         document.querySelector('#album_art').setAttribute('src', data.album_art);
-                        //document.body.style.backgroundImage = "url(" + data.album_art + ")";
-                        var styleElem = document.head.appendChild(document.createElement("style"));
+                        const styleElem = document.head.appendChild(document.createElement("style"));
                         styleElem.innerHTML = "body::before {background: url(" + data.album_art + ");}";
                     }
                 }
                 else {
                     if($("#album_art").attr("src")!='/notitle.png') {
                         document.querySelector('#album_art').setAttribute('src', '/notitle.png');
-                        //document.body.style.backgroundImage = "url(/notitle.png)";
-                        var styleElem = document.head.appendChild(document.createElement("style"));
+                        const styleElem = document.head.appendChild(document.createElement("style"));
                         styleElem.innerHTML = "body::before {background: url(/notitle.png);}";
                     }
                 }
             }
-        }); 
+        }).fail(() => handleApiError(new Error(), 'Get current playing')); 
     }
 
     // Progress Bar Refresh
@@ -150,8 +161,7 @@ Credits:
 
     // Get States
     function showstates() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/state";
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl('state'), function(data) {
             // play button
             if(data.state == "PLAYING" || data.state=="TRANSITIONING") {
                 document.getElementById("play").classList='play-pause active';
@@ -184,13 +194,11 @@ Credits:
                 document.getElementById("repeat").classList='';
             }
             lastzone = data.zone;
-            var text = `${data.zone}`;
-            // document.querySelector(".volume").innerHTML = data.volume;
             
             document.getElementById('volume').textContent = data.volume;
             document.getElementById('volume-slider').value = data.volume;
             
-        });
+        }).fail(() => handleApiError(new Error(), 'Get state'));
     }
 
     // Update Volume UI
@@ -273,15 +281,14 @@ Credits:
     }
     // Playlists 
     function showplaylists() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/listm3u";
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl('listm3u'), function(data) {
             // store entire array 
             let fn = "";
             let name = "";
             let output = "";
             let total = 0;
             let rownum = 1;
-            let playlists = data.sort() //(c1, c2) => (c1 > c2) ? 1 : (c1 < c2) ? -1 : 0);
+            const playlists = data.sort(); //(c1, c2) => (c1 > c2) ? 1 : (c1 < c2) ? -1 : 0);
             // 
             for (let x in playlists) {
                 output = output + "<li>" + 
@@ -298,27 +305,26 @@ Credits:
             clearmenu();
             document.getElementById("playlists").style.fontWeight = "bold";
             
-        });
+        }).fail(() => handleApiError(new Error(), 'Get playlists'));
         // setTimeout(showplaylists, 5000);
     }
 
     // Queue List
     function queuelist() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/playing";
-        var output = "";
-        $.getJSON(pwurl, function(data) {
+        let output = "";
+        $.getJSON(getApiUrl('playing'), function(data) {
             if(data.length) {
-                var length = new Date(data.length * 1000).toISOString().substring(14, 19)
+                const length = new Date(data.length * 1000).toISOString().substring(14, 19);
                 output = "<b>" + data.title +
                         " - " + data.album + " - " + data.artist + " [" + 
                         length + "]</b><br>\n";
             }
-        });
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queue";
-        $.getJSON(pwurl, function(data) {
+        }).fail(() => handleApiError(new Error(), 'Get playing'));
+        
+        $.getJSON(getApiUrl('queue'), function(data) {
             let rownum = 1;
             for (let x in data) {
-                let length = new Date(data[x].length * 1000).toISOString().substring(14, 19)
+                const length = new Date(data[x].length * 1000).toISOString().substring(14, 19);
                 output = output + rownum + " - " + data[x].title +
                     " - " + data[x].album + " - " + data[x].artist + " [" + 
                     length + "]<br>\n";
@@ -326,19 +332,18 @@ Credits:
             }
             document.querySelector(".queue").innerHTML = output;
             document.querySelector(".queuedepth").innerHTML = rownum-1;
-        });
+        }).fail(() => handleApiError(new Error(), 'Get queue'));
     }
 
     // Number of Songs in Queue - do we update list?
     function queuedepth() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/queuedepth";
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl('queuedepth'), function(data) {
             if(data.queuedepth != lastnumq) {
                 lastnumq = data.queuedepth;
                 setTimeout(showplaying, 500);
                 queuelist();
             }
-        });
+        }).fail(() => handleApiError(new Error(), 'Get queue depth'));
     }
 
     // Highlight element
@@ -373,51 +378,44 @@ Credits:
 
     // Click On
     function myclick(link) {
-        var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
-        console.log(clickurl)
+        const clickurl = getApiUrl(link);
+        console.log(clickurl);
         $.get(clickurl, function(data) {
-            displayNotification("Response: " + data.Response)
-        });   
+            displayNotification("Response: " + data.Response);
+        }).fail((error) => handleApiError(error, `Command ${link}`));   
         setTimeout(showstates, 100);
         setTimeout(showplaying, 100);
     }
 
     // Toggle play button
     function playtoggle() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/state";
-        $.getJSON(pwurl, function(data) {
-            var current = data.state;
-            var link = "";
+        $.getJSON(getApiUrl('state'), function(data) {
+            const current = data.state;
+            let link = "";
             if (current=="PLAYING") {
-                link = "pause"
+                link = "pause";
                 document.getElementById("play").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
                 document.getElementById("pause").classList='play-pause active';
             }
             else {
-                link = "play"
+                link = "play";
                 document.getElementById("pause").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
                 document.getElementById("play").classList='play-pause active';
             }
-            var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + link;
-            $.get(clickurl, function(data) {
-                //displayNotification("Response: " + data.Response)
-            });  
-        });
+            $.get(getApiUrl(link)).fail((error) => handleApiError(error, 'Play toggle'));  
+        }).fail(() => handleApiError(new Error(), 'Get state for toggle'));
         setTimeout(showstates, 1000);
         setTimeout(showplaying, 500);
     }
     
     // Show Recent Albums 
     function showrecent() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/recent";
-        var thumbbase = window.location.protocol + "//" + window.location.hostname;
-        var rownum = 1;
-        var thumb = "";
-        $.getJSON(pwurl, function(data) {
+        let rownum = 1;
+        $.getJSON(getApiUrl('albums/recent'), function(data) {
             // array of albums
-            var output = "";
+            let output = "";
             for (let x in data) {
                 /*
                 output = output + "<li>" + 
@@ -425,10 +423,9 @@ Credits:
                     encodeURI(data[x].key) + "');\">" + 
                     data[x].title + " - " + data[x].artist + "</a></li>\n";
                 */
-                if(data[x].thumbfile) 
-                    thumb = thumbbase + ":54000" + data[x].thumbfile
-                else
-                    thumb = thumbbase + ":8001/notitle.png"
+                const thumb = data[x].thumbfile 
+                    ? getMediaUrl(data[x].thumbfile)
+                    : getApiUrl('notitle.png');
                 output = output + 
                     "<div class='albumrow'>" +
                         "<div class='albumthumb'>" +
@@ -451,22 +448,21 @@ Credits:
             document.querySelector(".menucontent").innerHTML = output;
             clearmenu();
             document.getElementById("recent").style.fontWeight = "bold";
-        });
+        }).fail(() => handleApiError(new Error(), 'Get recent albums'));
     }
 
     function expandalbum(key) {
-        var id = ".songs" + key;
+        const id = ".songs" + key;
         if (document.querySelector(id).innerHTML == "") {
-            var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/album/" + key;
-            $.getJSON(pwurl, function(data) {
-                var songlist = "";
+            $.getJSON(getApiUrl(`album/${key}`), function(data) {
+                let songlist = "";
                 for (let x in data.tracks) {
-                    var length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19)
+                    const length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19);
                     songlist = songlist +         
-                        "<li><a href='#' onclick=\"javascript:myclick('addsong/" + encodeURI(data.tracks[x].key) +  "');\">" + data.tracks[x].song + " [" + length + "]</a></li>"
+                        "<li><a href='#' onclick=\"javascript:myclick('addsong/" + encodeURI(data.tracks[x].key) +  "');\">" + data.tracks[x].song + " [" + length + "]</a></li>";
                 }
                 document.querySelector(id).innerHTML = songlist;
-            });
+            }).fail(() => handleApiError(new Error(), `Get album ${key}`));
         }
         else {
             document.querySelector(id).innerHTML = "";
@@ -475,24 +471,23 @@ Credits:
     }
 
     function expandalbum2(key, row) {
-        var id = ".expand" + row;
-        var dataid = ".data" + row;
-        var albumid = ".album" + key;
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/album/" + key;
-        $.getJSON(pwurl, function(data) {
-            var songlist = "<span class=\"atitle\">" + data.title + "</span>" +
+        const id = ".expand" + row;
+        const dataid = ".data" + row;
+        const albumid = ".album" + key;
+        $.getJSON(getApiUrl(`album/${key}`), function(data) {
+            let songlist = "<span class=\"atitle\">" + data.title + "</span>" +
                 "<span class=\"asubtitle\">" + data.artist + "</span><br>" +
-                "<button onclick=\"javascript:myclick('albumadd/" + encodeURI(key) +  "');\">Add All</button><br>"
+                "<button onclick=\"javascript:myclick('albumadd/" + encodeURI(key) +  "');\">Add All</button><br>";
             for (let x in data.tracks) {
-                var length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19)
+                const length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19);
                 songlist = songlist +         
                     "<li><a href=\"#\" onclick=\"javascript:myclick('addsong/" + encodeURI(data.tracks[x].key) + 
                             "');\">" + data.tracks[x].song + " [" + length + "]</a></li>";
             }    
 
             // clear old highlights if set
-            var ha = localStorage.getItem('highlight-albumid');
-            var hr = localStorage.getItem('highlight-rowid');
+            const ha = localStorage.getItem('highlight-albumid');
+            const hr = localStorage.getItem('highlight-rowid');
             if (ha != albumid && ha != "") {
                 // unhighlight old album
                 document.querySelector(ha).style.backgroundColor = "";
@@ -534,26 +529,22 @@ Credits:
                 localStorage.setItem('highlight-albumid', albumid);
                 localStorage.setItem('highlight-rowid', id);
             }
-        });
+        }).fail(() => handleApiError(new Error(), `Get album ${key}`));
     }
 
     // Show Albums 
     function showalbums(scope) {
         // var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/all";
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/" + scope;
-        var thumbbase = window.location.protocol + "//" + window.location.hostname;
-        var thumb = "";
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl(`albums/${scope}`), function(data) {
             // array of albums
-            var output = "";
-            var col = 0;
-            var row = 0;
+            let output = "";
+            let col = 0;
+            let row = 0;
             // show all album tiles
             for (let x in data) {
-                if(data[x].thumbfile) 
-                    thumb = thumbbase + ":54000" + data[x].thumbfile
-                else
-                    thumb = thumbbase + ":8001/notitle.png"
+                const thumb = data[x].thumbfile 
+                    ? getMediaUrl(data[x].thumbfile)
+                    : getApiUrl('notitle.png');
                 col += 1;
                 if (col == 1) {
                     output = output + "<div class=\"arow rowid" + row.toString() + "\">\n";
@@ -608,16 +599,15 @@ Credits:
                 document.querySelector(".menutitle").innerHTML = "All Albums";
             }
 
-        });
+        }).fail(() => handleApiError(new Error(), `Get albums ${scope}`));
     }
 
     // Show Songs 
     function showsongs() {
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/recent";
-        var rownum = 1
-        $.getJSON(pwurl, function(data) {
+        let rownum = 1;
+        $.getJSON(getApiUrl('albums/recent'), function(data) {
             // array of albums
-            var output = "";
+            let output = "";
             for (let x in data) {
                 output = output + "<li>" + 
                     "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
@@ -630,7 +620,7 @@ Credits:
             document.querySelector(".menucontent").innerHTML = output;
             clearmenu();
             document.getElementById("songs").style.fontWeight = "bold";
-        });
+        }).fail(() => handleApiError(new Error(), 'Get songs'));
     }
 
     // Search 
@@ -657,10 +647,9 @@ Credits:
     function updateVolume(value) {
         document.getElementById('volume').textContent = value;
 
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001//volume/" + value;
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl(`/volume/${value}`), function(data) {
             console.log(data);
-        });
+        }).fail(() => handleApiError(new Error(), 'Set volume'));
         // Refresh Display
         setTimeout(showstates, 100);
     }
@@ -671,32 +660,30 @@ Credits:
     function updateVolume1(value, ip) {
         document.getElementById('volume-' + ip).textContent = value;
         document.getElementById('volume-slider-' + ip).value = value;
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001//speaker_vol/" + ip + "/" + value;
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl(`/speaker_vol/${ip}/${value}`), function(data) {
             console.log(data);
-        });
+        }).fail(() => handleApiError(new Error(), `Set speaker ${ip} volume`));
     }
     function updateVolumeDisplay1(value, ip) {
         const volumeValue = document.getElementById('volume-' + ip);
         volumeValue.textContent = value;
     }
     function updateVolumeclick(delta, ip) {
-        var newvalue = parseInt(document.getElementById('volume-slider-' + ip).value) + parseInt(delta)
+        const newvalue = parseInt(document.getElementById('volume-slider-' + ip).value) + parseInt(delta);
         document.getElementById('volume-' + ip).textContent = newvalue;
         document.getElementById('volume-slider-' + ip).value = newvalue;
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001//speaker_vol/" + ip + "/" + newvalue;
-        $.getJSON(pwurl, function(data) {
+        $.getJSON(getApiUrl(`/speaker_vol/${ip}/${newvalue}`), function(data) {
             console.log(data);
-        });
+        }).fail(() => handleApiError(new Error(), `Set speaker ${ip} volume`));
     }
     function toggleSpeaker(action, ip) {
-        var clickurl = window.location.protocol + "//" + window.location.hostname + ":8001/" + action + "/" + ip;
-        console.log(clickurl)
+        const clickurl = getApiUrl(`${action}/${ip}`);
+        console.log(clickurl);
         $.get(clickurl, function(data) {
-            displayNotification("Response: " + data.Response)
+            displayNotification("Response: " + data.Response);
             // Refresh speaker list immediately
             setTimeout(updatevolume, 500);
-        });   
+        }).fail((error) => handleApiError(error, `Toggle speaker ${ip}`));   
     }
     </script>
 </head>
