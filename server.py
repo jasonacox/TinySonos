@@ -871,7 +871,8 @@ def sse_monitor():
                         'artist': track_info.get('artist', ''),
                         'album': track_info.get('album', ''),
                         'position': track_info.get('position', '0:00:00'),
-                        'duration': track_info.get('duration', '0:00:00')
+                        'duration': track_info.get('duration', '0:00:00'),
+                        'album_art': track_info.get('album_art', '')
                     })
                     log.debug("SSE: Track changed")
             except Exception as e:

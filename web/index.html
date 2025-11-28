@@ -38,10 +38,82 @@ Credits:
         return `${window.location.protocol}//${window.location.hostname}:54000${path}`;
     };
 
+    // Backend offline detection and management
+    let backendOffline = false;
+    let offlineCheckInterval = null;
+    let consecutiveFailures = 0;
+    const FAILURE_THRESHOLD = 3; // Number of failures before showing offline modal
+
+    function showOfflineModal() {
+        if (backendOffline) return; // Already showing
+        backendOffline = true;
+        document.getElementById('offline-modal').style.display = 'flex';
+        startOfflineCheck();
+    }
+
+    function hideOfflineModal() {
+        backendOffline = false;
+        consecutiveFailures = 0;
+        document.getElementById('offline-modal').style.display = 'none';
+        if (offlineCheckInterval) {
+            clearInterval(offlineCheckInterval);
+            offlineCheckInterval = null;
+        }
+    }
+
+    async function checkBackendStatus() {
+        try {
+            const response = await fetch(getApiUrl('state'), { 
+                signal: AbortSignal.timeout(5000) 
+            });
+            if (response.ok) {
+                if (backendOffline) {
+                    console.log('Backend is back online');
+                    hideOfflineModal();
+                    // Reconnect SSE if needed
+                    if (sseEnabled && !sseConnected) {
+                        connectSSE();
+                    }
+                }
+                return true;
+            }
+        } catch (error) {
+            console.log('Backend check failed:', error.message);
+        }
+        return false;
+    }
+
+    function startOfflineCheck() {
+        if (offlineCheckInterval) return; // Already checking
+        // Check every 10 seconds
+        offlineCheckInterval = setInterval(async () => {
+            const isOnline = await checkBackendStatus();
+            if (isOnline && backendOffline) {
+                hideOfflineModal();
+            }
+        }, 10000);
+    }
+
     // Error handling helper
     const handleApiError = (error, context = 'API call') => {
         console.error(`${context} failed:`, error);
-        displayNotification(`Error: ${context} failed`);
+        
+        // Check if this is a network/backend error
+        if (error.name === 'TypeError' || error.message.includes('fetch') || 
+            error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+            consecutiveFailures++;
+            if (consecutiveFailures >= FAILURE_THRESHOLD) {
+                showOfflineModal();
+                return; // Don't show individual error notifications
+            }
+        } else {
+            consecutiveFailures = 0; // Reset on non-network errors
+        }
+        
+        // Only show notification if not in offline mode
+        if (!backendOffline) {
+            displayNotification(`Error: ${context} failed`);
+        }
     };
 
     // Server-Sent Events (SSE) Support
@@ -68,7 +140,14 @@ Credits:
         eventSource.addEventListener('connected', (e) => {
             console.log('SSE: Connected to server');
             reconnectAttempts = 0;
+            consecutiveFailures = 0; // Reset failure counter on successful SSE connection
             sseConnected = true;
+            
+            // Hide offline modal if it was showing
+            if (backendOffline) {
+                hideOfflineModal();
+            }
+            
             displayNotification('Real-time updates connected');
         });
         
@@ -81,6 +160,17 @@ Credits:
             document.querySelector(".album").innerHTML = data.album;
             document.querySelector("#current-time").innerHTML = data.position;
             document.querySelector("#duration").innerHTML = data.duration;
+            // Update album art immediately
+            const albumArtElem = document.querySelector('#album_art');
+            if(data.album_art && albumArtElem.getAttribute("src") != data.album_art) {
+                albumArtElem.setAttribute('src', data.album_art);
+                const styleElem = document.head.appendChild(document.createElement("style"));
+                styleElem.innerHTML = "body::before {background: url(" + data.album_art + ");}";  
+            } else if(!data.album_art && albumArtElem.getAttribute("src") != '/notitle.png') {
+                albumArtElem.setAttribute('src', '/notitle.png');
+                const styleElem = document.head.appendChild(document.createElement("style"));
+                styleElem.innerHTML = "body::before {background: url(/notitle.png);}";
+            }
         });
         
         eventSource.addEventListener('playback_state', (e) => {
@@ -150,13 +240,19 @@ Credits:
             eventSource = null;
             sseConnected = false;
             
+            // Check if backend is offline
+            consecutiveFailures++;
+            if (consecutiveFailures >= FAILURE_THRESHOLD) {
+                showOfflineModal();
+            }
+            
             // Attempt to reconnect with exponential backoff
-            if (reconnectAttempts < maxReconnectAttempts) {
+            if (reconnectAttempts < maxReconnectAttempts && !backendOffline) {
                 reconnectAttempts++;
                 const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
                 console.log(`SSE: Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
                 setTimeout(connectSSE, delay);
-            } else {
+            } else if (reconnectAttempts >= maxReconnectAttempts) {
                 console.warn('SSE: Max reconnection attempts reached, falling back to polling');
                 sseEnabled = false;
                 sseConnected = false;
@@ -232,6 +328,12 @@ Credits:
         try {
             const response = await fetch(getApiUrl('location'));
             const data = await response.json();
+            
+            // Reset failure counter on successful API call
+            if (consecutiveFailures > 0) {
+                consecutiveFailures = 0;
+            }
+            
             // current location and duration
             document.querySelector("#current-time").innerHTML = data.position;
             document.querySelector("#duration").innerHTML = data.duration;
@@ -1044,6 +1146,17 @@ Credits:
     <div class="alert" hidden="true">
         <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
         <b class="alerttext">This is an alert</b>
+    </div>
+
+    <!-- Backend Offline Modal -->
+    <div id="offline-modal" class="offline-modal" style="display: none;">
+        <div class="offline-content">
+            <div class="offline-icon">⚠️</div>
+            <h2>System Offline</h2>
+            <p>Unable to connect to the TinySonos server.</p>
+            <p class="offline-detail">Retrying every 10 seconds...</p>
+            <div class="offline-spinner"></div>
+        </div>
     </div>
 
     <div hidden="true" class="highlight-albumid">
