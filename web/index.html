@@ -29,6 +29,7 @@ Credits:
     let lastzone = 0;  // last speaker zone used
     let currentZone = null;  // current active zone for playback
 
+
     // API Configuration
     const getApiUrl = (endpoint) => {
         return `${window.location.protocol}//${window.location.hostname}:8001/${endpoint}`;
@@ -92,6 +93,41 @@ Credits:
                 hideOfflineModal();
             }
         }, 10000);
+    }
+
+    // Reload modal controls
+    let reloadTimer = null;
+    function showReloadModal() {
+        const modal = document.getElementById('reload-modal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        let count = 5;
+        const span = document.getElementById('reload-countdown');
+        if (span) span.textContent = String(count);
+        reloadTimer = setInterval(() => {
+            count -= 1;
+            if (span) span.textContent = String(count);
+            if (count <= 0) {
+                clearInterval(reloadTimer);
+                reloadTimer = null;
+                // Force reload to pick up new backend version
+                try {
+                    location.reload();
+                } catch (e) {
+                    window.location.href = window.location.href;
+                }
+            }
+        }, 1000);
+    }
+
+    function hideReloadModal() {
+        const modal = document.getElementById('reload-modal');
+        if (!modal) return;
+        modal.style.display = 'none';
+        if (reloadTimer) {
+            clearInterval(reloadTimer);
+            reloadTimer = null;
+        }
     }
 
     // Error handling helper
@@ -307,6 +343,25 @@ Credits:
             const statsData = await statsResponse.json();
             const text = `TinySonos Server v${statsData.tinysonos} [soco v${statsData.soco}]`;
             document.querySelector(".sonostitle").innerHTML = text;
+            // Reset network failure counter on successful stats fetch
+            if (consecutiveFailures > 0) consecutiveFailures = 0;
+
+            // Auto-reload if backend version changes
+            try {
+                const backendVer = statsData.tinysonos;
+                if (!window.backendVersion) {
+                    // first-time capture
+                    window.backendVersion = backendVer;
+                } else if (window.backendVersion !== backendVer) {
+                    console.log(`Backend version changed from ${window.backendVersion} to ${backendVer}`);
+                    // trigger reload modal and reload in 5s
+                    showReloadModal();
+                    // update stored version for future checks (in case reload suppressed)
+                    window.backendVersion = backendVer;
+                }
+            } catch (err) {
+                console.debug('Version compare error', err);
+            }
         } catch (error) {
             handleApiError(error, 'Get stats');
         }
@@ -1155,6 +1210,17 @@ Credits:
             <h2>System Offline</h2>
             <p>Unable to connect to the TinySonos server.</p>
             <p class="offline-detail">Retrying every 10 seconds...</p>
+            <div class="offline-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Reload-to-match-backend Modal -->
+    <div id="reload-modal" class="offline-modal" style="display: none;">
+        <div class="offline-content">
+            <div class="offline-icon">🔄</div>
+            <h2>Reloading to Match Backend</h2>
+            <p>The frontend will reload to match the updated backend version.</p>
+            <p class="offline-detail">Reloading in <span id="reload-countdown">5</span> seconds...</p>
             <div class="offline-spinner"></div>
         </div>
     </div>

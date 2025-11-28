@@ -620,6 +620,22 @@ input:checked + .toggle-slider:before {
     font-size: 24px;
 }
 
+/* Specific styling for the reload modal to avoid large wrapped headings */
+#reload-modal .offline-content h2 {
+    font-size: 24px;
+    line-height: 1.2;
+    margin-bottom: 10px;
+}
+
+/* Add extra spacing between the reload icon and heading for the reload modal */
+#reload-modal .offline-icon {
+    margin-bottom: 32px; /* larger gap to avoid touching */
+}
+
+/* Match the same spacing for the System Offline modal icon */
+#offline-modal .offline-icon {
+    margin-bottom: 32px;
+}
 .offline-content p {
     margin: 10px 0;
     font-size: 16px;
