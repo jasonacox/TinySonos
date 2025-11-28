@@ -1,11 +1,19 @@
 # Release Notes
 
 ## v0.0.26 (Current)
+- Added Server-Sent Events (SSE) for real-time updates without polling
+  - Real-time track changes, playback state, volume, and speaker updates
+  - Automatic reconnection with exponential backoff
+  - Graceful fallback to polling when SSE disconnected
+- Improved play/pause button UX to show next action instead of current state
+- Added "Disconnect" control to clear external music sources (Apple Music, Spotify, etc.)
+- Enhanced browser refresh handling with clean SSE reconnection
 - Added speaker join/unjoin functionality via web interface
 - Clickable speaker status indicators to activate/deactivate speakers in group
 - Enhanced speaker table display with Up/Down volume buttons
 - Added `requirements.txt` for Python dependencies
 - Improved documentation with local development setup instructions
+- Suppressed connection reset error stack traces for cleaner logs
 
 ## v0.0.25
 - Enhanced speaker volume control with individual sliders

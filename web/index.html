@@ -23,11 +23,11 @@ Credits:
     <link rel="icon" type="image/png" href="notitle.png">
     <link rel="stylesheet" type="text/css" href="style.css">
     <title>TinySonos API Server</title>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script>
     // Globals
     let lastnumq = 0;  // last number of songs in queue
     let lastzone = 0;  // last speaker zone used
+    let currentZone = null;  // current active zone for playback
 
     // API Configuration
     const getApiUrl = (endpoint) => {
@@ -44,6 +44,156 @@ Credits:
         displayNotification(`Error: ${context} failed`);
     };
 
+    // Server-Sent Events (SSE) Support
+    let eventSource = null;
+    let sseEnabled = true;
+    let sseConnected = false;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    
+    function connectSSE() {
+        if (!sseEnabled) return;
+        
+        // Close existing connection if present
+        if (eventSource) {
+            console.log('SSE: Closing existing connection...');
+            eventSource.close();
+            eventSource = null;
+            sseConnected = false;
+        }
+        
+        console.log('SSE: Connecting to event stream...');
+        eventSource = new EventSource(getApiUrl('events'));
+        
+        eventSource.addEventListener('connected', (e) => {
+            console.log('SSE: Connected to server');
+            reconnectAttempts = 0;
+            sseConnected = true;
+            displayNotification('Real-time updates connected');
+        });
+        
+        eventSource.addEventListener('track_changed', (e) => {
+            const data = JSON.parse(e.data);
+            console.log('SSE: Track changed', data);
+            // Update UI with new track info
+            document.querySelector(".title").innerHTML = data.title;
+            document.querySelector(".artist").innerHTML = data.artist;
+            document.querySelector(".album").innerHTML = data.album;
+            document.querySelector("#current-time").innerHTML = data.position;
+            document.querySelector("#duration").innerHTML = data.duration;
+        });
+        
+        eventSource.addEventListener('playback_state', (e) => {
+            const data = JSON.parse(e.data);
+            console.log('SSE: Playback state changed', data.state);
+            // Update play/pause/stop buttons
+            if(data.state == "PLAYING" || data.state == "TRANSITIONING") {
+                document.getElementById("pause").classList='play-pause active';
+                document.getElementById("play").classList='play-pause';
+                document.getElementById("stop").classList='play-pause';
+            }
+            if(data.state == "PAUSED_PLAYBACK") {
+                document.getElementById("play").classList='play-pause active';
+                document.getElementById("pause").classList='play-pause';
+                document.getElementById("stop").classList='play-pause';
+            }
+            if(data.state == "STOPPED") {
+                document.getElementById("play").classList='play-pause active';
+                document.getElementById("pause").classList='play-pause';
+                document.getElementById("stop").classList='play-pause';
+            }
+            // Update toggles
+            if(data.shuffle) {
+                document.querySelector(".shuffleT").innerHTML = "YES";
+                document.getElementById("shuffle").classList='active';
+            } else {
+                document.querySelector(".shuffleT").innerHTML = "NO";
+                document.getElementById("shuffle").classList='';
+            }
+            if(data.repeat) {
+                document.querySelector(".repeatT").innerHTML = "YES"
+                document.getElementById("repeat").classList='active';
+            } else {
+                document.querySelector(".repeatT").innerHTML = "NO";
+                document.getElementById("repeat").classList='';
+            }
+            // Update volume
+            document.getElementById('volume').textContent = data.volume;
+            document.getElementById('volume-slider').value = data.volume;
+            currentZone = data.zone;
+        });
+        
+        eventSource.addEventListener('volume_changed', (e) => {
+            const data = JSON.parse(e.data);
+            console.log('SSE: Volume changed', data.volume);
+            document.getElementById('volume').textContent = data.volume;
+            document.getElementById('volume-slider').value = data.volume;
+        });
+        
+        eventSource.addEventListener('speakers_changed', (e) => {
+            const data = JSON.parse(e.data);
+            console.log('SSE: Speakers configuration changed');
+            // Rebuild speaker table
+            updateSpeakerTable(data);
+        });
+        
+        eventSource.addEventListener('queue_changed', (e) => {
+            const data = JSON.parse(e.data);
+            console.log('SSE: Queue changed', data.queuedepth);
+            // Update queue list
+            queuelist();
+        });
+        
+        eventSource.onerror = (error) => {
+            console.error('SSE: Connection error', error);
+            eventSource.close();
+            eventSource = null;
+            sseConnected = false;
+            
+            // Attempt to reconnect with exponential backoff
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                console.log(`SSE: Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+                setTimeout(connectSSE, delay);
+            } else {
+                console.warn('SSE: Max reconnection attempts reached, falling back to polling');
+                sseEnabled = false;
+                sseConnected = false;
+            }
+        };
+    }
+    
+    // Helper function to update speaker table from SSE data
+    function updateSpeakerTable(data) {
+        let table = "<table style='margin-left: 10px;'>";
+        for (let name in data) {
+            const speaker = data[name];
+            const coord = speaker.coordinator ? '*' : ' ';
+            const ip = speaker.ip;
+            const joinAction = speaker.state ? "speaker_unjoin" : "speaker_join";
+            const joinText = speaker.state ? "Leave" : "Join";
+            const checked = speaker.state ? "checked" : "";
+            const isActiveZone = currentZone === ip;
+            const activeClass = isActiveZone ? " class='active-zone'" : "";
+
+            table += "<tr" + activeClass + ">";
+            table += "<td><a href=\"#\" onclick=\"javascript:myclick('setzone/" + ip + "');\" title='Click to set as active playback zone'>" + name + (isActiveZone ? " ▶" : "") + "</a></td>";
+            table += "<td><label class='toggle-switch' title='Click to " + joinText + " group'><input type='checkbox' " + checked + " onclick=\"javascript:toggleSpeaker('" + joinAction + "','" + ip + "');\"><span class='toggle-slider'></span></label></td>";
+            table += "<td>" + coord + "</td>";
+            table += "<td>Volume:</td>";
+            table += "<td><a href=\"#\" onclick=\"updateVolume1(0,'" + ip + "')\">Mute</a></td>";
+            table += "<td><label for='volume-slider-" + ip + "'></label></td>";
+            table += "<td><input type='range' id='volume-slider-" + ip + "' class='vol-slider' min='0' max='50' value='" + speaker.volume + "' step='1' oninput=\"updateVolumeDisplay1(this.value,'" + ip + "')\" onchange=\"updateVolume1(this.value,'" + ip + "')\"></td>";
+            table += "<td><span id='volume-" + ip + "'>" + speaker.volume + "</span></td>";
+            table += "<td><button onclick=\"updateVolumeclick(+1,'" + ip + "')\">Up</button></td>";
+            table += "<td><button onclick=\"updateVolumeclick(-1,'" + ip + "')\">Down</button></td>";
+            table += "</tr>";
+        }
+        table += "</table>";
+        document.querySelector(".speakers").innerHTML = table;
+    }
+
     // Fast and simple DOM update
     function _updateHTML(element, html) {
         const e = document.querySelector(element);
@@ -55,23 +205,33 @@ Credits:
     }
 
     // Get Version
-    function showversion() {
-        $.getJSON(getApiUrl('stats'), function(data) {
-            const text = `TinySonos Server v${data.tinysonos} [soco v${data.soco}]`;
-            $(".sonostitle").html(text);
-        }).fail(() => handleApiError(new Error(), 'Get stats'));
+    async function showversion() {
+        try {
+            const statsResponse = await fetch(getApiUrl('stats'));
+            const statsData = await statsResponse.json();
+            const text = `TinySonos Server v${statsData.tinysonos} [soco v${statsData.soco}]`;
+            document.querySelector(".sonostitle").innerHTML = text;
+        } catch (error) {
+            handleApiError(error, 'Get stats');
+        }
         
-        $.getJSON(getApiUrl('sonos'), function(data) {
-            const text = `Sonos: ${data.household_id} ${data.uid}`;
-            $(".sonos").html(text);
-        }).fail(() => handleApiError(new Error(), 'Get sonos info'));
+        try {
+            const sonosResponse = await fetch(getApiUrl('sonos'));
+            const sonosData = await sonosResponse.json();
+            const text = `Sonos: ${sonosData.household_id} ${sonosData.uid}`;
+            document.querySelector(".sonos").innerHTML = text;
+        } catch (error) {
+            handleApiError(error, 'Get sonos info');
+        }
         
         setTimeout(showversion, 60000);
     }
 
     // Get Current Playing
-    function showprogress() {
-        $.getJSON(getApiUrl('location'), function(data) {
+    async function showprogress() {
+        try {
+            const response = await fetch(getApiUrl('location'));
+            const data = await response.json();
             // current location and duration
             document.querySelector("#current-time").innerHTML = data.position;
             document.querySelector("#duration").innerHTML = data.duration;
@@ -81,12 +241,16 @@ Credits:
             const b = data.duration.split(':'); 
             const b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
             document.querySelector("#seek-slider").value = 100 * a1/b1;
-        }).fail(() => handleApiError(new Error(), 'Get progress')); 
+        } catch (error) {
+            handleApiError(error, 'Get progress');
+        }
     }
 
     // Get Current Playing
-    function showplaying() {
-        $.getJSON(getApiUrl('current'), function(data) {
+    async function showplaying() {
+        try {
+            const response = await fetch(getApiUrl('current'));
+            const data = await response.json();
             document.querySelector(".title").innerHTML = data.title;
             document.querySelector(".artist").innerHTML = data.artist;
             document.querySelector(".album").innerHTML = data.album;
@@ -94,7 +258,8 @@ Credits:
             document.querySelector("#duration").innerHTML = data.duration;
 
             // pull title from XML metadata if not existing
-            const xml = $.parseXML(data.metadata);
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(data.metadata, "text/xml");
             const xmltitle = xml.getElementsByTagName("dc:title")[0];
             if (data.title=='') {
                 document.querySelector(".title").innerHTML = xmltitle.childNodes[0].nodeValue;
@@ -108,75 +273,84 @@ Credits:
             document.querySelector("#seek-slider").value = 100 * a1/b1;
 
             // album art
+            const albumArtElem = document.querySelector('#album_art');
             if(data.album_art2) {
-                    if($("#album_art").attr("src")!=data.album_art2) {
-                        document.querySelector('#album_art').setAttribute('src', data.album_art2);
+                    if(albumArtElem.getAttribute("src")!=data.album_art2) {
+                        albumArtElem.setAttribute('src', data.album_art2);
                         const styleElem = document.head.appendChild(document.createElement("style"));
                         styleElem.innerHTML = "body::before {background: url(" + data.album_art2 + ");}";
                     }
                 } 
             else {
                 if(data.album_art) {
-                    if($("#album_art").attr("src")!=data.album_art) {
-                        document.querySelector('#album_art').setAttribute('src', data.album_art);
+                    if(albumArtElem.getAttribute("src")!=data.album_art) {
+                        albumArtElem.setAttribute('src', data.album_art);
                         const styleElem = document.head.appendChild(document.createElement("style"));
                         styleElem.innerHTML = "body::before {background: url(" + data.album_art + ");}";
                     }
                 }
                 else {
-                    if($("#album_art").attr("src")!='/notitle.png') {
-                        document.querySelector('#album_art').setAttribute('src', '/notitle.png');
+                    if(albumArtElem.getAttribute("src")!='/notitle.png') {
+                        albumArtElem.setAttribute('src', '/notitle.png');
                         const styleElem = document.head.appendChild(document.createElement("style"));
                         styleElem.innerHTML = "body::before {background: url(/notitle.png);}";
                     }
                 }
             }
-        }).fail(() => handleApiError(new Error(), 'Get current playing')); 
+        } catch (error) {
+            handleApiError(error, 'Get current playing');
+        } 
     }
 
-    // Progress Bar Refresh
+    // Progress Bar Refresh (still using local polling for smooth updates)
     function refreshprogress() {
         showprogress();
         setTimeout(refreshprogress, 500);
     }
 
-    // Things to Refresh every 1s
+    // Legacy polling functions - only used as fallback if SSE fails
     function refresh1s() {
-        showplaying();
-        queuedepth();
+        if (!sseConnected) {
+            showplaying();
+            queuedepth();
+        }
         setTimeout(refresh1s, 1000);
     }
 
-    // Things to Refresh every 5s
     function refresh5s() {
-        showstates();
+        if (!sseConnected) {
+            showstates();
+        }
         setTimeout(refresh5s, 5000);
     }
 
-    // Things to Refresh every 10s
     function refresh10s() {
-        updatevolume();
+        if (!sseConnected) {
+            updatevolume();
+        }
         setTimeout(refresh10s, 10000);
     }
 
     // Get States
-    function showstates() {
-        $.getJSON(getApiUrl('state'), function(data) {
+    async function showstates() {
+        try {
+            const response = await fetch(getApiUrl('state'));
+            const data = await response.json();
             // play button
             if(data.state == "PLAYING" || data.state=="TRANSITIONING") {
+                document.getElementById("pause").classList='play-pause active';
+                document.getElementById("play").classList='play-pause';
+                document.getElementById("stop").classList='play-pause';
+            }
+            if(data.state == "PAUSED_PLAYBACK") {
                 document.getElementById("play").classList='play-pause active';
                 document.getElementById("pause").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            if(data.state == "PAUSED_PLAYBACK") {
-                document.getElementById("play").classList='play-pause';
-                document.getElementById("pause").classList='play-pause active';
-                document.getElementById("stop").classList='play-pause';
-            }
             if(data.state == "STOPPED") {
-                document.getElementById("play").classList='play-pause';
+                document.getElementById("play").classList='play-pause active';
                 document.getElementById("pause").classList='play-pause';
-                document.getElementById("stop").classList='play-pause active';
+                document.getElementById("stop").classList='play-pause';
             }
             // toggles
             if(data.shuffle) {
@@ -194,79 +368,51 @@ Credits:
                 document.getElementById("repeat").classList='';
             }
             lastzone = data.zone;
+            currentZone = data.zone;
             
             document.getElementById('volume').textContent = data.volume;
             document.getElementById('volume-slider').value = data.volume;
             
-        }).fail(() => handleApiError(new Error(), 'Get state'));
+        } catch (error) {
+            handleApiError(error, 'Get state');
+        }
     }
 
     // Update Volume UI
-    function updatevolumeold() {
-        // Speaker and volume update
-        var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
-        $.getJSON(pwurl, function(data) {
-            var text = ``;
-            var coord = ' ';
-            for (let x in data) {
-                if(data[x].coordinator) {
-                    coord = '*';
-                }
-                else {
-                    coord = ' ';
-                }
-                var joined = " [ ]";
-                if(data[x].state) {
-                    joined = " [X]"
-                }
-                var addr = '"' + data[x].ip + '"';
-                text = text + "<li><a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + 
-                    x + joined + coord + "</a>" + " - Volume: [<a href=\"#\"s onclick='updateVolume1(0," + addr + ")'> Mute </a>]" + 
-                    "<label for='volume-slider-" + data[x].ip + "'>" + "</label>" +
-                    "<input type='range' id='volume-slider-" + data[x].ip + "'' class='vol-slider' min='0' max='50' value='" + data[x].volume + "' step='1' oninput='updateVolumeDisplay1(this.value," + addr + ")' onchange='updateVolume1(this.value," + addr + ")'>" +
-                    "<span id='volume-" + data[x].ip + "'>" + data[x].volume + "</span>" +
-                    "</li>";
-                // text = text + "<li><a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + 
-                //     x + joined + coord + "</a>" + " - Volume: " + data[x].volume +
-                //     " [<a href=\"#\" onclick=\"javascript:myclick('speaker_vol/" + data[x].ip + "/up');\"> Up+ </a>]" +
-                //     " [<a href=\"#\" onclick=\"javascript:myclick('speaker_vol/" + data[x].ip + "/down');\"> Down- </a>]" +
-                //     "</li>";
-            }
-            text = text + "\n"
-            document.querySelector(".speakers").innerHTML = text;
-        });
-    }
-
-    // Update Volume UI
-    function updatevolume() {
+    async function updatevolume() {
     // Speaker and volume update
-    var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/speakers";
-    $.getJSON(pwurl, function(data) {
-        var table = "<table style='margin-left: 10px;'>";
+    try {
+        const response = await fetch(getApiUrl('speakers'));
+        const data = await response.json();
+        let table = "<table style='margin-left: 10px;'>";
         for (let x in data) {
-            var coord = data[x].coordinator ? '*' : ' ';
-            var joined = data[x].state ? "[X]" : "[ ]";
-            var addr = '"' + data[x].ip + '"';
-            var joinAction = data[x].state ? "speaker_unjoin" : "speaker_join";
-            var joinText = data[x].state ? "Leave" : "Join";
+            const coord = data[x].coordinator ? '*' : ' ';
+            const ip = data[x].ip;
+            const joinAction = data[x].state ? "speaker_unjoin" : "speaker_join";
+            const joinText = data[x].state ? "Leave" : "Join";
+            const checked = data[x].state ? "checked" : "";
+            const isActiveZone = currentZone === ip;
+            const activeClass = isActiveZone ? " class='active-zone'" : "";
 
-            table += "<tr>";
-            table += "<td><a href=\"#\" onclick=\"javascript:myclick('setzone/" + data[x].ip + "');\">" + x + "</a></td>";
-            table += "<td><a href=\"#\" onclick=\"javascript:toggleSpeaker('" + joinAction + "'," + addr + ");\" title='Click to " + joinText + " group'>" + joined + "</a></td>";
+            table += "<tr" + activeClass + ">";
+            table += "<td><a href=\"#\" onclick=\"javascript:myclick('setzone/" + ip + "');\" title='Click to set as active playback zone'>" + x + (isActiveZone ? " ▶" : "") + "</a></td>";
+            table += "<td><label class='toggle-switch' title='Click to " + joinText + " group'><input type='checkbox' " + checked + " onclick=\"javascript:toggleSpeaker('" + joinAction + "','" + ip + "');\"><span class='toggle-slider'></span></label></td>";
             table += "<td>" + coord + "</td>";
             table += "<td>Volume:</td>";
-            table += "<td><a href=\"#\" onclick='updateVolume1(0," + addr + ")'>Mute</a></td>";
-            table += "<td><label for='volume-slider-" + data[x].ip + "'></label></td>";
-            table += "<td><input type='range' id='volume-slider-" + data[x].ip + "' class='vol-slider' min='0' max='50' value='" + data[x].volume + "' step='1' oninput='updateVolumeDisplay1(this.value," + addr + ")' onchange='updateVolume1(this.value," + addr + ")'></td>";
-            table += "<td><span id='volume-" + data[x].ip + "'>" + data[x].volume + "</span></td>";
-            table += "<td><button onclick='updateVolumeclick(+1," + addr + ")'>Up</button></td>"; // Up button
-            table += "<td><button onclick='updateVolumeclick(-1," + addr + ")'>Down</button></td>"; // Down button
+            table += "<td><a href=\"#\" onclick=\"updateVolume1(0,'" + ip + "')\">Mute</a></td>";
+            table += "<td><label for='volume-slider-" + ip + "'></label></td>";
+            table += "<td><input type='range' id='volume-slider-" + ip + "' class='vol-slider' min='0' max='50' value='" + data[x].volume + "' step='1' oninput=\"updateVolumeDisplay1(this.value,'" + ip + "')\" onchange=\"updateVolume1(this.value,'" + ip + "')\"></td>";
+            table += "<td><span id='volume-" + ip + "'>" + data[x].volume + "</span></td>";
+            table += "<td><button onclick=\"updateVolumeclick(+1,'" + ip + "')\">Up</button></td>"; // Up button
+            table += "<td><button onclick=\"updateVolumeclick(-1,'" + ip + "')\">Down</button></td>"; // Down button
             table += "</tr>";
         }
         table += "</table>";
 
         document.querySelector(".speakers").innerHTML = table;
-    });
+    } catch (error) {
+        handleApiError(error, 'Get speakers');
+    }
 }
 
 
@@ -280,8 +426,10 @@ Credits:
         document.getElementById("search").style.fontWeight = "normal";
     }
     // Playlists 
-    function showplaylists() {
-        $.getJSON(getApiUrl('listm3u'), function(data) {
+    async function showplaylists() {
+        try {
+            const response = await fetch(getApiUrl('listm3u'));
+            const data = await response.json();
             // store entire array 
             let fn = "";
             let name = "";
@@ -305,45 +453,59 @@ Credits:
             clearmenu();
             document.getElementById("playlists").style.fontWeight = "bold";
             
-        }).fail(() => handleApiError(new Error(), 'Get playlists'));
+        } catch (error) {
+            handleApiError(error, 'Get playlists');
+        }
         // setTimeout(showplaylists, 5000);
     }
 
     // Queue List
-    function queuelist() {
+    async function queuelist() {
         let output = "";
-        $.getJSON(getApiUrl('playing'), function(data) {
-            if(data.length) {
-                const length = new Date(data.length * 1000).toISOString().substring(14, 19);
-                output = "<b>" + data.title +
-                        " - " + data.album + " - " + data.artist + " [" + 
+        try {
+            const playingResponse = await fetch(getApiUrl('playing'));
+            const playingData = await playingResponse.json();
+            if(playingData.length) {
+                const length = new Date(playingData.length * 1000).toISOString().substring(14, 19);
+                output = "<b>" + playingData.title +
+                        " - " + playingData.album + " - " + playingData.artist + " [" + 
                         length + "]</b><br>\n";
             }
-        }).fail(() => handleApiError(new Error(), 'Get playing'));
+        } catch (error) {
+            handleApiError(error, 'Get playing');
+        }
         
-        $.getJSON(getApiUrl('queue'), function(data) {
+        try {
+            const queueResponse = await fetch(getApiUrl('queue'));
+            const queueData = await queueResponse.json();
             let rownum = 1;
-            for (let x in data) {
-                const length = new Date(data[x].length * 1000).toISOString().substring(14, 19);
-                output = output + rownum + " - " + data[x].title +
-                    " - " + data[x].album + " - " + data[x].artist + " [" + 
+            for (let x in queueData) {
+                const length = new Date(queueData[x].length * 1000).toISOString().substring(14, 19);
+                output = output + rownum + " - " + queueData[x].title +
+                    " - " + queueData[x].album + " - " + queueData[x].artist + " [" + 
                     length + "]<br>\n";
                 rownum++;
             }
             document.querySelector(".queue").innerHTML = output;
             document.querySelector(".queuedepth").innerHTML = rownum-1;
-        }).fail(() => handleApiError(new Error(), 'Get queue'));
+        } catch (error) {
+            handleApiError(error, 'Get queue');
+        }
     }
 
     // Number of Songs in Queue - do we update list?
-    function queuedepth() {
-        $.getJSON(getApiUrl('queuedepth'), function(data) {
+    async function queuedepth() {
+        try {
+            const response = await fetch(getApiUrl('queuedepth'));
+            const data = await response.json();
             if(data.queuedepth != lastnumq) {
                 lastnumq = data.queuedepth;
                 setTimeout(showplaying, 500);
                 queuelist();
             }
-        }).fail(() => handleApiError(new Error(), 'Get queue depth'));
+        } catch (error) {
+            handleApiError(error, 'Get queue depth');
+        }
     }
 
     // Highlight element
@@ -365,55 +527,76 @@ Credits:
 
     // Alert
     function removeNotification() {
-        $(".alert").hide(100);
+        const alert = document.querySelector(".alert");
+        alert.style.display = 'none';
     }
 
     function displayNotification(notification) {
-        $(".alert").show(100);
-        $(".alerttext").html(notification);
+        const alert = document.querySelector(".alert");
+        const alertText = document.querySelector(".alerttext");
+        alert.style.display = 'block';
+        alertText.innerHTML = notification;
         setTimeout(() => {
             removeNotification();
         }, 2000);
     }
 
     // Click On
-    function myclick(link) {
+    async function myclick(link) {
         const clickurl = getApiUrl(link);
         console.log(clickurl);
-        $.get(clickurl, function(data) {
+        try {
+            const response = await fetch(clickurl);
+            const data = await response.json();
             displayNotification("Response: " + data.Response);
-        }).fail((error) => handleApiError(error, `Command ${link}`));   
+        } catch (error) {
+            handleApiError(error, `Command ${link}`);
+        }
         setTimeout(showstates, 100);
         setTimeout(showplaying, 100);
+        // If setting zone, refresh speaker list to update active zone indicator
+        if (link.startsWith('setzone/')) {
+            setTimeout(updatevolume, 100);
+        }
     }
 
     // Toggle play button
-    function playtoggle() {
-        $.getJSON(getApiUrl('state'), function(data) {
+    async function playtoggle() {
+        try {
+            const response = await fetch(getApiUrl('state'));
+            const data = await response.json();
             const current = data.state;
             let link = "";
             if (current=="PLAYING") {
                 link = "pause";
-                document.getElementById("play").classList='play-pause';
+                document.getElementById("play").classList='play-pause active';
                 document.getElementById("stop").classList='play-pause';
-                document.getElementById("pause").classList='play-pause active';
+                document.getElementById("pause").classList='play-pause';
             }
             else {
                 link = "play";
-                document.getElementById("pause").classList='play-pause';
+                document.getElementById("pause").classList='play-pause active';
                 document.getElementById("stop").classList='play-pause';
-                document.getElementById("play").classList='play-pause active';
+                document.getElementById("play").classList='play-pause';
             }
-            $.get(getApiUrl(link)).fail((error) => handleApiError(error, 'Play toggle'));  
-        }).fail(() => handleApiError(new Error(), 'Get state for toggle'));
+            try {
+                await fetch(getApiUrl(link));
+            } catch (error) {
+                handleApiError(error, 'Play toggle');
+            }
+        } catch (error) {
+            handleApiError(error, 'Get state for toggle');
+        }
         setTimeout(showstates, 1000);
         setTimeout(showplaying, 500);
     }
     
     // Show Recent Albums 
-    function showrecent() {
+    async function showrecent() {
         let rownum = 1;
-        $.getJSON(getApiUrl('albums/recent'), function(data) {
+        try {
+            const response = await fetch(getApiUrl('albums/recent'));
+            const data = await response.json();
             // array of albums
             let output = "";
             for (let x in data) {
@@ -448,13 +631,17 @@ Credits:
             document.querySelector(".menucontent").innerHTML = output;
             clearmenu();
             document.getElementById("recent").style.fontWeight = "bold";
-        }).fail(() => handleApiError(new Error(), 'Get recent albums'));
+        } catch (error) {
+            handleApiError(error, 'Get recent albums');
+        }
     }
 
-    function expandalbum(key) {
+    async function expandalbum(key) {
         const id = ".songs" + key;
         if (document.querySelector(id).innerHTML == "") {
-            $.getJSON(getApiUrl(`album/${key}`), function(data) {
+            try {
+                const response = await fetch(getApiUrl(`album/${key}`));
+                const data = await response.json();
                 let songlist = "";
                 for (let x in data.tracks) {
                     const length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19);
@@ -462,7 +649,9 @@ Credits:
                         "<li><a href='#' onclick=\"javascript:myclick('addsong/" + encodeURI(data.tracks[x].key) +  "');\">" + data.tracks[x].song + " [" + length + "]</a></li>";
                 }
                 document.querySelector(id).innerHTML = songlist;
-            }).fail(() => handleApiError(new Error(), `Get album ${key}`));
+            } catch (error) {
+                handleApiError(error, `Get album ${key}`);
+            }
         }
         else {
             document.querySelector(id).innerHTML = "";
@@ -470,11 +659,13 @@ Credits:
 
     }
 
-    function expandalbum2(key, row) {
+    async function expandalbum2(key, row) {
         const id = ".expand" + row;
         const dataid = ".data" + row;
         const albumid = ".album" + key;
-        $.getJSON(getApiUrl(`album/${key}`), function(data) {
+        try {
+            const response = await fetch(getApiUrl(`album/${key}`));
+            const data = await response.json();
             let songlist = "<span class=\"atitle\">" + data.title + "</span>" +
                 "<span class=\"asubtitle\">" + data.artist + "</span><br>" +
                 "<button onclick=\"javascript:myclick('albumadd/" + encodeURI(key) +  "');\">Add All</button><br>";
@@ -529,13 +720,17 @@ Credits:
                 localStorage.setItem('highlight-albumid', albumid);
                 localStorage.setItem('highlight-rowid', id);
             }
-        }).fail(() => handleApiError(new Error(), `Get album ${key}`));
+        } catch (error) {
+            handleApiError(error, `Get album ${key}`);
+        }
     }
 
     // Show Albums 
-    function showalbums(scope) {
+    async function showalbums(scope) {
         // var pwurl = window.location.protocol + "//" + window.location.hostname + ":8001/albums/all";
-        $.getJSON(getApiUrl(`albums/${scope}`), function(data) {
+        try {
+            const response = await fetch(getApiUrl(`albums/${scope}`));
+            const data = await response.json();
             // array of albums
             let output = "";
             let col = 0;
@@ -599,13 +794,17 @@ Credits:
                 document.querySelector(".menutitle").innerHTML = "All Albums";
             }
 
-        }).fail(() => handleApiError(new Error(), `Get albums ${scope}`));
+        } catch (error) {
+            handleApiError(error, `Get albums ${scope}`);
+        }
     }
 
     // Show Songs 
-    function showsongs() {
+    async function showsongs() {
         let rownum = 1;
-        $.getJSON(getApiUrl('albums/recent'), function(data) {
+        try {
+            const response = await fetch(getApiUrl('albums/recent'));
+            const data = await response.json();
             // array of albums
             let output = "";
             for (let x in data) {
@@ -620,7 +819,9 @@ Credits:
             document.querySelector(".menucontent").innerHTML = output;
             clearmenu();
             document.getElementById("songs").style.fontWeight = "bold";
-        }).fail(() => handleApiError(new Error(), 'Get songs'));
+        } catch (error) {
+            handleApiError(error, 'Get songs');
+        }
     }
 
     // Search 
@@ -644,12 +845,16 @@ Credits:
     }
 
     // Volume Change Handlers
-    function updateVolume(value) {
+    async function updateVolume(value) {
         document.getElementById('volume').textContent = value;
 
-        $.getJSON(getApiUrl(`/volume/${value}`), function(data) {
+        try {
+            const response = await fetch(getApiUrl(`/volume/${value}`));
+            const data = await response.json();
             console.log(data);
-        }).fail(() => handleApiError(new Error(), 'Set volume'));
+        } catch (error) {
+            handleApiError(error, 'Set volume');
+        }
         // Refresh Display
         setTimeout(showstates, 100);
     }
@@ -657,33 +862,51 @@ Credits:
         const volumeValue = document.getElementById('volume');
         volumeValue.textContent = value;
     }
-    function updateVolume1(value, ip) {
+    async function updateVolume1(value, ip) {
         document.getElementById('volume-' + ip).textContent = value;
         document.getElementById('volume-slider-' + ip).value = value;
-        $.getJSON(getApiUrl(`/speaker_vol/${ip}/${value}`), function(data) {
+        try {
+            const response = await fetch(getApiUrl(`/speaker_vol/${ip}/${value}`));
+            const data = await response.json();
             console.log(data);
-        }).fail(() => handleApiError(new Error(), `Set speaker ${ip} volume`));
+            // Refresh speaker list after a brief delay to get updated state from server
+            setTimeout(updatevolume, 1000);
+        } catch (error) {
+            handleApiError(error, `Set speaker ${ip} volume`);
+        }
     }
     function updateVolumeDisplay1(value, ip) {
         const volumeValue = document.getElementById('volume-' + ip);
         volumeValue.textContent = value;
+        const volumeSlider = document.getElementById('volume-slider-' + ip);
+        volumeSlider.value = value;
     }
-    function updateVolumeclick(delta, ip) {
+    async function updateVolumeclick(delta, ip) {
         const newvalue = parseInt(document.getElementById('volume-slider-' + ip).value) + parseInt(delta);
         document.getElementById('volume-' + ip).textContent = newvalue;
         document.getElementById('volume-slider-' + ip).value = newvalue;
-        $.getJSON(getApiUrl(`/speaker_vol/${ip}/${newvalue}`), function(data) {
+        try {
+            const response = await fetch(getApiUrl(`/speaker_vol/${ip}/${newvalue}`));
+            const data = await response.json();
             console.log(data);
-        }).fail(() => handleApiError(new Error(), `Set speaker ${ip} volume`));
+            // Refresh speaker list after a brief delay to get updated state from server
+            setTimeout(updatevolume, 1000);
+        } catch (error) {
+            handleApiError(error, `Set speaker ${ip} volume`);
+        }
     }
-    function toggleSpeaker(action, ip) {
+    async function toggleSpeaker(action, ip) {
         const clickurl = getApiUrl(`${action}/${ip}`);
         console.log(clickurl);
-        $.get(clickurl, function(data) {
+        try {
+            const response = await fetch(clickurl);
+            const data = await response.json();
             displayNotification("Response: " + data.Response);
             // Refresh speaker list immediately
             setTimeout(updatevolume, 500);
-        }).fail((error) => handleApiError(error, `Toggle speaker ${ip}`));   
+        } catch (error) {
+            handleApiError(error, `Toggle speaker ${ip}`);
+        }
     }
     </script>
 </head>
@@ -793,6 +1016,7 @@ Credits:
                         | <a href="#" onclick="javascript:myclick('next');">Next >></a> 
                         | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeatT">NO</b></a> 
                         | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffleT">NO</b></a>
+                        | <a href="#" onclick="javascript:myclick('disconnect');">Disconnect</a>
                     </li>
                 </span>
             </div>
@@ -838,7 +1062,14 @@ Credits:
     showplaylists();
     queuelist();
     queuedepth();
-    // Refresh
+    
+    // Try to connect via SSE for real-time updates
+    connectSSE();
+    
+    // Start progress bar refresh (always using local polling for smooth UI)
+    refreshprogress();
+    
+    // Start fallback polling (will be conditional based on SSE status)
     refresh1s();
     refresh5s();
     refresh10s();

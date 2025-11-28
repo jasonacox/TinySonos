@@ -1,6 +1,7 @@
 FROM python:3.10-alpine
 WORKDIR /app
-RUN pip3 install soco rangehttpserver
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 COPY . .
 CMD ["python3", "server.py"]
 EXPOSE 8001
