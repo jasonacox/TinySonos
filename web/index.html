@@ -228,20 +228,36 @@ Credits:
                 document.getElementById("pause").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            // Update toggles
-            if(data.shuffle) {
-                document.querySelector(".shuffleT").innerHTML = "YES";
-                document.getElementById("shuffle").classList='active';
-            } else {
-                document.querySelector(".shuffleT").innerHTML = "NO";
-                document.getElementById("shuffle").classList='';
+            // Update toggles (Repeat/Shuffle buttons highlight when active)
+            const shuffleBtn = document.getElementById("shuffle");
+            if (shuffleBtn) {
+                if (data.shuffle) {
+                    shuffleBtn.classList.add('active');
+                    shuffleBtn.setAttribute('aria-pressed','true');
+                } else {
+                    shuffleBtn.classList.remove('active');
+                    shuffleBtn.setAttribute('aria-pressed','false');
+                }
+                // also mirror state to the player icon if present
+                const shuffleIcon = document.getElementById('shuffle_icon');
+                if (shuffleIcon) {
+                    if (data.shuffle) shuffleIcon.classList.add('active'); else shuffleIcon.classList.remove('active');
+                }
             }
-            if(data.repeat) {
-                document.querySelector(".repeatT").innerHTML = "YES"
-                document.getElementById("repeat").classList='active';
-            } else {
-                document.querySelector(".repeatT").innerHTML = "NO";
-                document.getElementById("repeat").classList='';
+            const repeatBtn = document.getElementById("repeat");
+            if (repeatBtn) {
+                if (data.repeat) {
+                    repeatBtn.classList.add('active');
+                    repeatBtn.setAttribute('aria-pressed','true');
+                } else {
+                    repeatBtn.classList.remove('active');
+                    repeatBtn.setAttribute('aria-pressed','false');
+                }
+                // also mirror state to the player icon if present
+                const repeatIcon = document.getElementById('repeat_icon');
+                if (repeatIcon) {
+                    if (data.repeat) repeatIcon.classList.add('active'); else repeatIcon.classList.remove('active');
+                }
             }
             // Update volume
             document.getElementById('volume').textContent = data.volume;
@@ -313,13 +329,11 @@ Credits:
             table += "<td><a href=\"#\" onclick=\"javascript:myclick('setzone/" + ip + "');\" title='Click to set as active playback zone'>" + name + (isActiveZone ? " ▶" : "") + "</a></td>";
             table += "<td><label class='toggle-switch' title='Click to " + joinText + " group'><input type='checkbox' " + checked + " onclick=\"javascript:toggleSpeaker('" + joinAction + "','" + ip + "');\"><span class='toggle-slider'></span></label></td>";
             table += "<td>" + coord + "</td>";
-            table += "<td>Volume:</td>";
-            table += "<td><a href=\"#\" onclick=\"updateVolume1(0,'" + ip + "')\">Mute</a></td>";
             table += "<td><label for='volume-slider-" + ip + "'></label></td>";
             table += "<td><input type='range' id='volume-slider-" + ip + "' class='vol-slider' min='0' max='50' value='" + speaker.volume + "' step='1' oninput=\"updateVolumeDisplay1(this.value,'" + ip + "')\" onchange=\"updateVolume1(this.value,'" + ip + "')\"></td>";
             table += "<td><span id='volume-" + ip + "'>" + speaker.volume + "</span></td>";
-            table += "<td><button onclick=\"updateVolumeclick(+1,'" + ip + "')\">Up</button></td>";
-            table += "<td><button onclick=\"updateVolumeclick(-1,'" + ip + "')\">Down</button></td>";
+            table += "<td><button title='Volume up' onclick=\"updateVolumeclick(+1,'" + ip + "')\">▲</button></td>";
+            table += "<td><button title='Volume down' onclick=\"updateVolumeclick(-1,'" + ip + "')\">▼</button></td>";
             table += "</tr>";
         }
         table += "</table>";
@@ -509,20 +523,36 @@ Credits:
                 document.getElementById("pause").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            // toggles
-            if(data.shuffle) {
-                document.querySelector(".shuffleT").innerHTML = "YES";
-                document.getElementById("shuffle").classList='active';
-            } else {
-                document.querySelector(".shuffleT").innerHTML = "NO";
-                document.getElementById("shuffle").classList='';
+            // toggles (highlight buttons when active)
+            const shuffleBtn = document.getElementById('shuffle');
+            if (shuffleBtn) {
+                if (data.shuffle) {
+                    shuffleBtn.classList.add('active');
+                    shuffleBtn.setAttribute('aria-pressed','true');
+                } else {
+                    shuffleBtn.classList.remove('active');
+                    shuffleBtn.setAttribute('aria-pressed','false');
+                }
+                // also mirror state to the player icon if present
+                const shuffleIcon = document.getElementById('shuffle_icon');
+                if (shuffleIcon) {
+                    if (data.shuffle) shuffleIcon.classList.add('active'); else shuffleIcon.classList.remove('active');
+                }
             }
-            if(data.repeat) {
-                document.querySelector(".repeatT").innerHTML = "YES"
-                document.getElementById("repeat").classList='active';
-            } else {
-                document.querySelector(".repeatT").innerHTML = "NO";
-                document.getElementById("repeat").classList='';
+            const repeatBtn = document.getElementById('repeat');
+            if (repeatBtn) {
+                if (data.repeat) {
+                    repeatBtn.classList.add('active');
+                    repeatBtn.setAttribute('aria-pressed','true');
+                } else {
+                    repeatBtn.classList.remove('active');
+                    repeatBtn.setAttribute('aria-pressed','false');
+                }
+                // also mirror state to the player icon if present
+                const repeatIcon = document.getElementById('repeat_icon');
+                if (repeatIcon) {
+                    if (data.repeat) repeatIcon.classList.add('active'); else repeatIcon.classList.remove('active');
+                }
             }
             lastzone = data.zone;
             currentZone = data.zone;
@@ -555,13 +585,11 @@ Credits:
             table += "<td><a href=\"#\" onclick=\"javascript:myclick('setzone/" + ip + "');\" title='Click to set as active playback zone'>" + x + (isActiveZone ? " ▶" : "") + "</a></td>";
             table += "<td><label class='toggle-switch' title='Click to " + joinText + " group'><input type='checkbox' " + checked + " onclick=\"javascript:toggleSpeaker('" + joinAction + "','" + ip + "');\"><span class='toggle-slider'></span></label></td>";
             table += "<td>" + coord + "</td>";
-            table += "<td>Volume:</td>";
-            table += "<td><a href=\"#\" onclick=\"updateVolume1(0,'" + ip + "')\">Mute</a></td>";
             table += "<td><label for='volume-slider-" + ip + "'></label></td>";
             table += "<td><input type='range' id='volume-slider-" + ip + "' class='vol-slider' min='0' max='50' value='" + data[x].volume + "' step='1' oninput=\"updateVolumeDisplay1(this.value,'" + ip + "')\" onchange=\"updateVolume1(this.value,'" + ip + "')\"></td>";
             table += "<td><span id='volume-" + ip + "'>" + data[x].volume + "</span></td>";
-            table += "<td><button onclick=\"updateVolumeclick(+1,'" + ip + "')\">Up</button></td>"; // Up button
-            table += "<td><button onclick=\"updateVolumeclick(-1,'" + ip + "')\">Down</button></td>"; // Down button
+            table += "<td><button title='Volume up' onclick=\"updateVolumeclick(+1,'" + ip + "')\">▲</button></td>"; // Up button
+            table += "<td><button title='Volume down' onclick=\"updateVolumeclick(-1,'" + ip + "')\">▼</button></td>"; // Down button
             table += "</tr>";
         }
         table += "</table>";
@@ -1087,7 +1115,7 @@ Credits:
                         <span id="duration" class="time-stamp">00:00:00</span>
                     </div>
                     <div class="bottom-controls">
-                        <div id="repeat"  onclick="javascript:myclick('toggle/repeat');">
+                        <div id="repeat_icon" onclick="javascript:myclick('toggle/repeat');">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path
                                     d="M19 10.9089C18.447 10.9089 18 11.3162 18 11.818C18 13.3217 16.654 14.5453 15 14.5453H7V11.818C7 11.4689 6.77902 11.1498 6.43402 10.9989C6.08503 10.848 5.67601 10.8898 5.37501 11.108L0.374989 14.7444C0.137973 14.9172 0 15.1781 0 15.4545C0 15.7308 0.138016 15.9917 0.374989 16.1645L5.37501 19.8009C5.55599 19.9318 5.77703 20 5.99999 20C6.14699 20 6.296 19.97 6.43398 19.91C6.77897 19.7591 6.99996 19.44 6.99996 19.0909V16.3636H15C17.757 16.3636 20 14.3244 20 11.818C20 11.3162 19.553 10.9089 19 10.9089Z"
@@ -1129,19 +1157,19 @@ Credits:
                             </svg>
                         </div>
         
-                        <div id="shuffle" onclick="javascript:myclick('toggle/shuffle');">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path
-                                    d="M0.83332 5.45423H2.5C3.23332 5.45423 3.95418 5.66423 4.58332 6.06242C4.715 6.14607 4.85914 6.18515 5.00082 6.18515C5.28832 6.18515 5.56832 6.02241 5.7225 5.73242C5.95418 5.29788 5.8175 4.74151 5.42 4.48966C4.53582 3.9315 3.52668 3.63602 2.5 3.63602H0.83332C0.3725 3.63602 0 4.04332 0 4.54515C0 5.04697 0.3725 5.45423 0.83332 5.45423Z"
-                                    fill="#808782" />
-                                <path
-                                    d="M12.5 5.45423H14.1667V8.18153C14.1667 8.53063 14.3509 8.84972 14.6384 9.00062C14.7542 9.06062 14.8775 9.09062 15 9.09062C15.1859 9.09062 15.37 9.02244 15.5209 8.89153L19.6875 5.25514C19.885 5.08242 20 4.8215 20 4.54514C20 4.26879 19.885 4.00786 19.6875 3.83515L15.5208 0.198718C15.27 -0.0194664 14.9258 -0.0612709 14.6383 0.0896256C14.3508 0.240522 14.1666 0.559617 14.1666 0.908711V3.63601H12.5C9.28418 3.63601 6.66668 6.4906 6.66668 9.9997C6.66668 12.5061 4.7975 14.5452 2.5 14.5452H0.83332C0.3725 14.5452 0 14.9525 0 15.4544C0 15.9562 0.3725 16.3634 0.83332 16.3634H2.5C5.71582 16.3634 8.33332 13.5088 8.33332 9.99975C8.33332 7.49336 10.2025 5.45423 12.5 5.45423Z"
-                                    fill="#808782" />
-                                <path
-                                    d="M19.6875 14.7445L15.5208 11.1081C15.27 10.889 14.9258 10.8472 14.6383 10.9981C14.3508 11.15 14.1666 11.4681 14.1666 11.8182V14.5455H12.5C11.6767 14.5455 10.88 14.2836 10.1967 13.7882C9.81167 13.5118 9.29585 13.6236 9.04167 14.0427C8.78667 14.4609 8.89085 15.0254 9.27417 15.3027C10.2317 15.9963 11.3467 16.3636 12.5 16.3636H14.1667V19.0909C14.1667 19.44 14.3509 19.7591 14.6384 19.91C14.7542 19.97 14.8775 20 15 20C15.1859 20 15.37 19.9318 15.5209 19.8009L19.6875 16.1645C19.885 15.9918 20 15.73 20 15.4545C20 15.1781 19.885 14.9163 19.6875 14.7445Z"
-                                    fill="#808782" />
-                            </svg>
-                        </div>
+                    <div id="shuffle_icon" onclick="javascript:myclick('toggle/shuffle');">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M0.83332 5.45423H2.5C3.23332 5.45423 3.95418 5.66423 4.58332 6.06242C4.715 6.14607 4.85914 6.18515 5.00082 6.18515C5.28832 6.18515 5.56832 6.02241 5.7225 5.73242C5.95418 5.29788 5.8175 4.74151 5.42 4.48966C4.53582 3.9315 3.52668 3.63602 2.5 3.63602H0.83332C0.3725 3.63602 0 4.04332 0 4.54515C0 5.04697 0.3725 5.45423 0.83332 5.45423Z"
+                                fill="#808782" />
+                            <path
+                                d="M12.5 5.45423H14.1667V8.18153C14.1667 8.53063 14.3509 8.84972 14.6384 9.00062C14.7542 9.06062 14.8775 9.09062 15 9.09062C15.1859 9.09062 15.37 9.02244 15.5209 8.89153L19.6875 5.25514C19.885 5.08242 20 4.8215 20 4.54514C20 4.26879 19.885 4.00786 19.6875 3.83515L15.5208 0.198718C15.27 -0.0194664 14.9258 -0.0612709 14.6383 0.0896256C14.3508 0.240522 14.1666 0.559617 14.1666 0.908711V3.63601H12.5C9.28418 3.63601 6.66668 6.4906 6.66668 9.9997C6.66668 12.5061 4.7975 14.5452 2.5 14.5452H0.83332C0.3725 14.5452 0 14.9525 0 15.4544C0 15.9562 0.3725 16.3634 0.83332 16.3634H2.5C5.71582 16.3634 8.33332 13.5088 8.33332 9.99975C8.33332 7.49336 10.2025 5.45423 12.5 5.45423Z"
+                                fill="#808782" />
+                            <path
+                                d="M19.6875 14.7445L15.5208 11.1081C15.27 10.889 14.9258 10.8472 14.6383 10.9981C14.3508 11.15 14.1666 11.4681 14.1666 11.8182V14.5455H12.5C11.6767 14.5455 10.88 14.2836 10.1967 13.7882C9.81167 13.5118 9.29585 13.6236 9.04167 14.0427C8.78667 14.4609 8.89085 15.0254 9.27417 15.3027C10.2317 15.9963 11.3467 16.3636 12.5 16.3636H14.1667V19.0909C14.1667 19.44 14.3509 19.7591 14.6384 19.91C14.7542 19.97 14.8775 20 15 20C15.1859 20 15.37 19.9318 15.5209 19.8009L19.6875 16.1645C19.885 15.9918 20 15.73 20 15.4545C20 15.1781 19.885 14.9163 19.6875 14.7445Z"
+                                fill="#808782" />
+                        </svg>
+                    </div>
         
                     </div>
                 </div>
@@ -1158,25 +1186,28 @@ Credits:
             <div class="sonostitle">Sonos</div>
             <div class="system">
                 <div id="volume-container">
-                    <label for="volume-slider">Speakers - Main Volume [<a href="#" onclick="javascript:myclick('volume/mute');"> Mute </a>]:</label>
+                    <label for="volume-slider">Speakers - Main Volume <a href="#" class="volume-mute-link" onclick="javascript:myclick('volume/mute');" title="Mute">🔇</a></label>
                     <input type="range" id="volume-slider" class="vol-slider" min="0" max="50" value="0" step="1" oninput="updateVolumeDisplay(this.value)" onchange="updateVolume(this.value)">
                     <span id="volume">0</span>
                 </div>
                 <!-- <span>Speaker Volume:</b> <b class="volume">0</b> [<a href="#" onclick="javascript:myclick('volume/up');"> Up+ </a>  
                     / <a href="#" onclick="javascript:myclick('volume/down');"> Down- </a>]</span> -->
                 <span class="speakers">Unknown</span>
-                <span>Controls: 
-                    <li><a href="#" onclick="javascript:myclick('play');">Play</a> 
-                        | <a href="#" onclick="javascript:myclick('pause');">Pause</a>  
-                        | <a href="#" onclick="javascript:myclick('stop');">Stop</a> 
-                        | <a href="#" onclick="javascript:myclick('prev');"><< Prev</a> 
-                        | <a href="#" onclick="javascript:myclick('next');">Next >></a> 
-                        | <a href="#" onclick="javascript:myclick('toggle/repeat');">Repeat: <b class="repeatT">NO</b></a> 
-                        | <a href="#" onclick="javascript:myclick('toggle/shuffle');">Shuffle: <b class="shuffleT">NO</b></a>
-                        | <a href="#" onclick="javascript:myclick('disconnect');">Disconnect</a>
-                    </li>
-                </span>
             </div>
+            <!-- Thin control panel placed under speaker list -->
+            <div class="control-panel">
+                <div class="controls-toolbar" role="toolbar" aria-label="Playback controls">
+                    <button class="ctrl" onclick="javascript:myclick('prev');" title="Previous">⏮</button>
+                    <button class="ctrl primary" onclick="javascript:myclick('play');" title="Play">▶</button>
+                    <button class="ctrl" onclick="javascript:myclick('pause');" title="Pause">⏸</button>
+                    <button class="ctrl" onclick="javascript:myclick('stop');" title="Stop">⏹</button>
+                    <button class="ctrl" onclick="javascript:myclick('next');" title="Next">⏭</button>
+                    <button id="repeat" class="toggle" onclick="javascript:myclick('toggle/repeat');" aria-pressed="false" title="Repeat">Repeat</button>
+                    <button id="shuffle" class="toggle" onclick="javascript:myclick('toggle/shuffle');" aria-pressed="false" title="Shuffle">Shuffle</button>
+                    <button class="ctrl danger" onclick="javascript:myclick('disconnect');" title="Disconnect">⛔</button>
+                </div>
+            </div>
+
             <div class="menu-container">
                 <p class="headings">Song Library</p>
                 <div class="menu-row">

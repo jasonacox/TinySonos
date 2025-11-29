@@ -141,7 +141,7 @@ body {
 }
 
 .queue-container {
-    width: 362px;
+    width: 320px;
     position: relative;
     margin: 0 auto;
     /* top: 50%;
@@ -161,7 +161,7 @@ body {
 }
 
 .player-container {
-    width: 362px;
+    width: 320px;
     position: relative;
     margin: 0 auto;
     /* top: 50%;
@@ -175,7 +175,7 @@ body {
     background-color: #FEFFFE;
     height: auto;
     /* 640px */
-    width: 22.5rem;
+    width: 20rem;
     /* 360px */
     /* 20px */
     overflow: hidden;
@@ -184,22 +184,22 @@ body {
 }
 
 .album-cover {
-    margin: 1.75rem auto;
-    /* 28px */
-    width: 15rem;
-    /* 240px */
-    height: 15rem;
-    /* 240px */
+    margin: 1.25rem auto;
+    /* 20px */
+    width: 13rem;
+    /* ~208px */
+    height: 13rem;
+    /* ~208px */
     border-radius: 5%;
     box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px;
     user-select: none;
 }
 
 .album-cover img {
-    width: 15rem;
-    /* 240px */
-    height: 15rem;
-    /* 240px */
+    width: 13rem;
+    /* ~208px */
+    height: 13rem;
+    /* ~208px */
     border-radius: 5%;
 }
 
@@ -209,7 +209,7 @@ body {
 }
 
 .title {
-    max-width: 18.75rem;
+    max-width: 16rem;
     /* 300px */
     color: #242423;
     text-align: center;
@@ -221,7 +221,7 @@ body {
 }
 
 .album {
-    max-width: 18.75rem;
+    max-width: 16rem;
     /* 300px */
     color: #808782;
     text-align: center;
@@ -642,6 +642,94 @@ input:checked + .toggle-slider:before {
     color: #cccccc;
 }
 
+/* Remove underline for the small icon mute link in the header */
+.volume-mute-link {
+    text-decoration: none;
+    color: inherit;
+    display: inline-block;
+    line-height: 1;
+}
+
+/* Controls toolbar styles */
+.controls-toolbar {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: 8px;
+}
+
+.controls-toolbar .ctrl,
+.controls-toolbar .toggle {
+    background: transparent;
+    border: 1px solid #d0d0d0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.95em;
+}
+
+.controls-toolbar .ctrl:hover,
+.controls-toolbar .toggle:hover {
+    background: #f5f5f5;
+}
+
+.controls-toolbar .primary {
+    background: #cc7e85;
+    color: #fff;
+    border-color: #cc7e85;
+}
+
+.controls-toolbar .danger {
+    border-color: #e57373;
+    color: #a33;
+}
+
+.controls-toolbar .toggle {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+/* Active state for toggles (use same accent as main play icon) */
+.controls-toolbar .toggle.active {
+    background: #cc7e85; /* play button / icon accent color */
+    color: #fff;
+    border-color: #cc7e85;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.06) inset;
+}
+
+/* Make toggle focus visible and accessible */
+.controls-toolbar .toggle:focus {
+    outline: 3px solid rgba(204,126,133,0.18);
+    outline-offset: 2px;
+}
+
+/* Ensure the small SVG icons in the main player reflect the active color when their container gets .active */
+#repeat_icon.active svg path,
+#shuffle_icon.active svg path {
+    fill: #cc7e85;
+}
+
+/* Thin control panel style placed under speakers */
+.control-panel {
+    margin: 12px 0;
+    padding: 6px 10px;
+    background: #FEFFFE;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+
+.control-panel .controls-toolbar {
+    gap: 10px;
+}
+
+/* Make buttons slightly smaller in the thin panel */
+.control-panel .ctrl, .control-panel .toggle {
+    padding: 6px 8px;
+    font-size: 0.9em;
+}
+
 .offline-detail {
     font-size: 14px;
     color: #999999;
@@ -661,4 +749,124 @@ input:checked + .toggle-slider:before {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments for small/portrait screens */
+@media (max-width: 768px) {
+    /* Stack main columns */
+    .row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .playercolumn, .datacolumn {
+        flex: 100%;
+        width: 100%;
+    }
+
+    /* Make player and queue full-width and add side padding */
+    .player-container, .queue-container {
+        width: 100%;
+        margin: 0 auto;
+        padding: 0 12px;
+        box-sizing: border-box;
+    }
+
+    .player {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Scale album art by viewport width so it remains square */
+    .album-cover, .album-cover img {
+        width: 60vw;
+        height: 60vw;
+        max-width: 320px;
+        max-height: 320px;
+        margin: 0.75rem auto;
+    }
+
+    /* Avoid long text wrapping issues */
+    .title, .album, .artist {
+        max-width: 92%;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: 1.05em;
+    }
+
+    /* Allow controls to wrap and remain visible */
+    .bottom-controls {
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    .bottom-controls > div {
+        flex: 1 1 auto;
+        min-width: 48px;
+        text-align: center;
+    }
+
+    /* Make range inputs full width */
+    input[type="range"] {
+        width: 100%;
+    }
+
+    .menu-left, .menu-right {
+        float: none;
+        width: 100%;
+        display: block;
+        box-sizing: border-box;
+        padding: 6px 12px;
+    }
+
+    .menu-right {
+        padding-top: 0;
+    }
+
+    .queue {
+        font-size: 0.95em;
+    }
+
+    .vol-slider {
+        width: 100% !important;
+    }
+
+    .arow {
+        flex-wrap: wrap;
+    }
+
+    .album-card {
+        width: 45%;
+    }
+
+    /* Make modals fit smaller screens */
+    .offline-content {
+        padding: 20px;
+        max-width: 92%;
+    }
+
+    /* (compact speaker controls removed) */
+}
+
+@media (max-width: 420px) {
+    /* Portrait phones: slightly smaller album art and text */
+    .album-cover, .album-cover img {
+        width: 70vw;
+        height: 70vw;
+        max-width: 280px;
+        max-height: 280px;
+    }
+
+    .title { font-size: 1.0em; }
+    .album { font-size: 0.95em; }
+    .artist { font-size: 0.95em; }
+
+    .bottom-controls svg { width: 36px; height: 36px; }
+
+    .album-card { width: 48%; }
+
+    .menu-left p { margin: 4px 0; }
+
+    .offline-icon { font-size: 52px; }
 }
