@@ -313,11 +313,28 @@ Credits:
             console.log('SSE: Album art type:', typeof data.album_art);
             console.log('SSE: Album art length:', data.album_art ? data.album_art.length : 0);
             
+            // Parse XML metadata if title is empty (external source playing)
+            let title = data.title;
+            let artist = data.artist;
+            let album = data.album;
+            
+            if (!title && data.metadata) {
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(data.metadata, "text/xml");
+                const xmlTitle = xml.getElementsByTagName("dc:title")[0];
+                const xmlCreator = xml.getElementsByTagName("dc:creator")[0];
+                const xmlAlbum = xml.getElementsByTagName("upnp:album")[0];
+                
+                if (xmlTitle && xmlTitle.childNodes[0]) title = xmlTitle.childNodes[0].nodeValue;
+                if (xmlCreator && xmlCreator.childNodes[0]) artist = xmlCreator.childNodes[0].nodeValue;
+                if (xmlAlbum && xmlAlbum.childNodes[0]) album = xmlAlbum.childNodes[0].nodeValue;
+            }
+            
             // Update UI with new track info
-            console.log('Track info - Title:', data.title, 'Album:', data.album, 'Artist:', data.artist);
-            document.querySelector(".title").innerHTML = data.title;
-            document.querySelector(".artist").innerHTML = data.artist;
-            document.querySelector(".album").innerHTML = data.album;
+            console.log('Track info - Title:', title, 'Album:', album, 'Artist:', artist);
+            document.querySelector(".title").innerHTML = title;
+            document.querySelector(".artist").innerHTML = artist;
+            document.querySelector(".album").innerHTML = album;
             
             // Sync client-side timer with server position
             if (data.position && data.duration) {
@@ -374,21 +391,41 @@ Credits:
                 syncPosition(data.position, data.duration, data.state);
             }
             
-            // Update play/pause/stop buttons
+            // Bottom-controls: Show action user can take (play when stopped/paused, pause when playing)
             if(data.state == "PLAYING" || data.state == "TRANSITIONING") {
+                // Show pause button - user can pause
                 document.getElementById("pause").classList='play-pause active';
                 document.getElementById("play").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            if(data.state == "PAUSED_PLAYBACK") {
+            else if(data.state == "PAUSED_PLAYBACK" || data.state == "STOPPED") {
+                // Show play button - user can start/resume
                 document.getElementById("play").classList='play-pause active';
                 document.getElementById("pause").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            if(data.state == "STOPPED") {
-                document.getElementById("play").classList='play-pause active';
-                document.getElementById("pause").classList='play-pause';
-                document.getElementById("stop").classList='play-pause';
+            
+            // Control panel buttons: Show current state
+            if(data.state == "PLAYING" || data.state == "TRANSITIONING") {
+                if (document.getElementById("play-btn")) {
+                    document.getElementById("play-btn").classList.add('primary');
+                    document.getElementById("pause-btn").classList.remove('primary');
+                    document.getElementById("stop-btn").classList.remove('primary');
+                }
+            }
+            else if(data.state == "PAUSED_PLAYBACK") {
+                if (document.getElementById("pause-btn")) {
+                    document.getElementById("pause-btn").classList.add('primary');
+                    document.getElementById("play-btn").classList.remove('primary');
+                    document.getElementById("stop-btn").classList.remove('primary');
+                }
+            }
+            else if(data.state == "STOPPED") {
+                if (document.getElementById("stop-btn")) {
+                    document.getElementById("stop-btn").classList.add('primary');
+                    document.getElementById("play-btn").classList.remove('primary');
+                    document.getElementById("pause-btn").classList.remove('primary');
+                }
             }
             // Update toggles (Repeat/Shuffle buttons highlight when active)
             const shuffleBtn = document.getElementById("shuffle");
@@ -583,6 +620,21 @@ Credits:
         setTimeout(showversion, 60000);
     }
 
+    // Update state indicator to show when external system controls Sonos
+    function updateStateIndicator(tinysonosState, sonosState) {
+        const stateElem = document.getElementById('state-indicator');
+        if (!stateElem) return;  // Element doesn't exist yet
+        
+        // Show indicator when Sonos is playing but TinySonos is stopped
+        if (sonosState === 'PLAYING' && tinysonosState === 'STOPPED') {
+            stateElem.innerHTML = '<span style="color: #ffa500;" title="External source (Alexa/Apple Music) is controlling Sonos">⚡ External</span>';
+        } else if (tinysonosState === 'PLAYING' || tinysonosState === 'TRANSITIONING') {
+            stateElem.innerHTML = '<span style="color: #4CAF50;" title="TinySonos is in control">▶ TinySonos</span>';
+        } else {
+            stateElem.innerHTML = '';  // Clear indicator
+        }
+    }
+
     // Get Current Playing
     async function showprogress() {
         try {
@@ -592,6 +644,55 @@ Credits:
             // Reset failure counter on successful API call
             if (consecutiveFailures > 0) {
                 consecutiveFailures = 0;
+            }
+            
+            // Update state indicator (show if external system is controlling Sonos)
+            updateStateIndicator(data.state, data.sonos_state);
+            
+            // Update player info (title, artist, album) with XML parsing fallback
+            let title = data.title;
+            let artist = data.artist;
+            let album = data.album;
+            
+            if (!title && data.metadata) {
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(data.metadata, "text/xml");
+                const xmlTitle = xml.getElementsByTagName("dc:title")[0];
+                const xmlCreator = xml.getElementsByTagName("dc:creator")[0];
+                const xmlAlbum = xml.getElementsByTagName("upnp:album")[0];
+                
+                if (xmlTitle && xmlTitle.childNodes[0]) title = xmlTitle.childNodes[0].nodeValue;
+                if (xmlCreator && xmlCreator.childNodes[0]) artist = xmlCreator.childNodes[0].nodeValue;
+                if (xmlAlbum && xmlAlbum.childNodes[0]) album = xmlAlbum.childNodes[0].nodeValue;
+            }
+            
+            // Only update if we have info (avoids clearing display when offline)
+            if (title || artist || album) {
+                document.querySelector(".title").innerHTML = title || '';
+                document.querySelector(".artist").innerHTML = artist || '';
+                document.querySelector(".album").innerHTML = album || '';
+            }
+            
+            // Update album art if available (helps with initial load and missed SSE events)
+            if (data.album_art) {
+                const albumArtElem = document.querySelector('#album_art');
+                const currentSrc = albumArtElem.src;
+                const newSrc = data.album_art.startsWith('http') ? data.album_art : window.location.origin + data.album_art;
+                
+                if (currentSrc !== newSrc) {
+                    const preload = new Image();
+                    preload.onload = () => {
+                        albumArtElem.src = data.album_art;
+                        const styleElem = document.head.appendChild(document.createElement("style"));
+                        styleElem.innerHTML = "body::before {background: url(" + data.album_art + ");}";
+                    };
+                    preload.onerror = () => {
+                        albumArtElem.src = '/notitle.png';
+                        const styleElem = document.head.appendChild(document.createElement("style"));
+                        styleElem.innerHTML = "body::before {background: url(/notitle.png);}";
+                    };
+                    preload.src = data.album_art;
+                }
             }
             
             // Sync client-side timer with server position
@@ -643,21 +744,41 @@ Credits:
         try {
             const response = await fetch(getApiUrl('state'));
             const data = await response.json();
-            // play button
+            // Bottom-controls: Show action user can take (play when stopped/paused, pause when playing)
             if(data.state == "PLAYING" || data.state=="TRANSITIONING") {
+                // Show pause button - user can pause
                 document.getElementById("pause").classList='play-pause active';
                 document.getElementById("play").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            if(data.state == "PAUSED_PLAYBACK") {
+            else if(data.state == "PAUSED_PLAYBACK" || data.state == "STOPPED") {
+                // Show play button - user can start/resume
                 document.getElementById("play").classList='play-pause active';
                 document.getElementById("pause").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            if(data.state == "STOPPED") {
-                document.getElementById("play").classList='play-pause active';
-                document.getElementById("pause").classList='play-pause';
-                document.getElementById("stop").classList='play-pause';
+            
+            // Control panel buttons: Show current state
+            if(data.state == "PLAYING" || data.state=="TRANSITIONING") {
+                if (document.getElementById("play-btn")) {
+                    document.getElementById("play-btn").classList.add('primary');
+                    document.getElementById("pause-btn").classList.remove('primary');
+                    document.getElementById("stop-btn").classList.remove('primary');
+                }
+            }
+            else if(data.state == "PAUSED_PLAYBACK") {
+                if (document.getElementById("pause-btn")) {
+                    document.getElementById("pause-btn").classList.add('primary');
+                    document.getElementById("play-btn").classList.remove('primary');
+                    document.getElementById("stop-btn").classList.remove('primary');
+                }
+            }
+            else if(data.state == "STOPPED") {
+                if (document.getElementById("stop-btn")) {
+                    document.getElementById("stop-btn").classList.add('primary');
+                    document.getElementById("play-btn").classList.remove('primary');
+                    document.getElementById("pause-btn").classList.remove('primary');
+                }
             }
             // toggles (highlight buttons when active)
             const shuffleBtn = document.getElementById('shuffle');
@@ -796,8 +917,10 @@ Credits:
                         for (let i = 0; i < playlists.length; i++) {
                                 const name = playlists[i];
                                 const count = counts[i] || 0;
+                                // Display name without .m3u8 extension for cleaner UI
+                                const displayName = name.replace(/\.m3u8?$/i, '');
                                 output += '<tr>' +
-                                        '<td><a href="#" onclick="javascript:myclick(\'playlist/' + encodeURI(name) + '\'); return false;">' + name + '</a></td>' +
+                                        '<td><a href="#" onclick="javascript:myclick(\'playlist/' + encodeURI(name) + '\'); return false;">' + displayName + '</a></td>' +
                                         '<td style="text-align:center;">' + count + '</td>' +
                                         '<td style="text-align:center;">' +
                                             '<button class="add-queue" aria-label="Add to Queue" title="Add to Queue" onclick="javascript:myclick(\'playlist/' + encodeURI(name) + '\');">+</button>' +
@@ -829,7 +952,7 @@ Credits:
             const playingData = await playingResponse.json();
             if(playingData.length) {
                 const length = new Date(playingData.length * 1000).toISOString().substring(14, 19);
-                output = "<b>" + playingData.title +
+                output = "<b>▶ " + playingData.title +
                         " - " + playingData.album + " - " + playingData.artist + " [" + 
                         length + "]</b><br>\n";
             }
@@ -840,10 +963,16 @@ Credits:
         try {
             const queueResponse = await fetch(getApiUrl('queue'));
             const queueData = await queueResponse.json();
+            
+            // Add "Up Next" header if there are queued songs
+            if (queueData.length > 0 && output) {
+                output += "<span style='opacity: 0.7; font-size: 0.9em;'>Up Next:</span><br>\n";
+            }
+            
             let rownum = 1;
             for (let x in queueData) {
                 const length = new Date(queueData[x].length * 1000).toISOString().substring(14, 19);
-                output = output + rownum + " - " + queueData[x].title +
+                output = output + rownum + ". " + queueData[x].title +
                     " - " + queueData[x].album + " - " + queueData[x].artist + " [" + 
                     length + "]<br>\n";
                 rownum++;
@@ -1327,9 +1456,9 @@ Credits:
             <div class="control-panel">
                 <div class="controls-toolbar" role="toolbar" aria-label="Playback controls">
                     <button class="ctrl" onclick="javascript:myclick('prev');" title="Previous">⏮</button>
-                    <button class="ctrl primary" onclick="javascript:myclick('play');" title="Play">▶</button>
-                    <button class="ctrl" onclick="javascript:myclick('pause');" title="Pause">⏸</button>
-                    <button class="ctrl" onclick="javascript:myclick('stop');" title="Stop">⏹</button>
+                    <button id="play-btn" class="ctrl" onclick="javascript:myclick('play');" title="Play">▶</button>
+                    <button id="pause-btn" class="ctrl" onclick="javascript:myclick('pause');" title="Pause">⏸</button>
+                    <button id="stop-btn" class="ctrl" onclick="javascript:myclick('stop');" title="Stop">⏹</button>
                     <button class="ctrl" onclick="javascript:myclick('next');" title="Next">⏭</button>
                     <button id="repeat" class="toggle" onclick="javascript:myclick('toggle/repeat');" aria-pressed="false" title="Repeat">Repeat</button>
                     <button id="shuffle" class="toggle" onclick="javascript:myclick('toggle/shuffle');" aria-pressed="false" title="Shuffle">Shuffle</button>
@@ -1362,6 +1491,8 @@ Credits:
         <span id="screen-size">-</span>
         <span style="margin:0 8px;color:var(--muted);">·</span>
         <span class="sonos">Sonos: Unknown</span>
+        <span style="margin:0 8px;color:var(--muted);">·</span>
+        <span id="state-indicator"></span>
     </footer>
 
     <div class="alert" hidden="true">
@@ -1442,6 +1573,9 @@ Credits:
     
     // Start client-side playback timer for smooth position updates
     startPlaybackTimer();
+    
+    // Initialize state display (control-panel buttons, etc.)
+    showstates();
     
     // Start progress bar refresh (reduced frequency with client-side interpolation)
     refreshprogress();

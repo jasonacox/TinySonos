@@ -1,5 +1,66 @@
 # Tools
 
+## check_metadata - Audio Metadata and Album Art Checker
+
+This tool checks audio files for embedded metadata including album art.
+It's useful for verifying that your music files have proper tags and artwork
+that will be displayed by Sonos players and the TinySonos UI.
+
+### Supported Formats
+- MP3 (ID3 tags)
+- M4A/MP4 (iTunes/Apple tags)
+- FLAC
+- And other formats supported by mutagen
+
+### What it checks
+- Title, Artist, Album, Date, Genre metadata
+- Embedded album artwork (presence, format, size)
+- File format detection
+
+### Usage
+
+```bash
+# Install required library
+pip3 install mutagen
+
+# Check a single file
+python3 check_metadata.py /path/to/song.mp3
+
+# Check multiple files
+python3 check_metadata.py /path/to/album/*.mp3
+
+# Check all files in a directory (recursive)
+python3 check_metadata.py /path/to/music/**/*.m4a
+```
+
+### Example Output
+
+```
+============================================================
+Checking: /media/Music/Artist/Album/song.m4a
+============================================================
+
+File Type: MP4
+
+Metadata Tags:
+------------------------------------------------------------
+  Title       : Song Title
+  Artist      : Artist Name
+  Album       : Album Name
+  Date        : 2023
+  Genre       : Pop
+
+============================================================
+Album Art Check:
+============================================================
+✅ Album art FOUND! (1 image(s))
+
+  Image 1:
+    Type: Cover
+    MIME: image/jpeg
+    Size: 71,115 bytes (69.4 KB)
+```
+
 ## PlexExportM3U - Export Plex Playlist to M3U Format
 
 This tool connects to your Plex server and exports all of the

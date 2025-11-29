@@ -441,15 +441,11 @@ input[type="range"]:active::-ms-thumb {
     display: none;
 }
 
-#stop {
-    fill: gray;
-}
-
-.active {
+.play-pause.active {
     display: block;
 }
 
-.active svg path {
+.play-pause.active svg path {
     fill: var(--accent);
 }
 
@@ -921,7 +917,7 @@ input:checked + .toggle-slider:before {
 }
 .speakers table {
     font-size: 0.82rem;
-    width: 100%;
+    width: auto;
     border-collapse: collapse;
     background: transparent;
 }

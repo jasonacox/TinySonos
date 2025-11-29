@@ -42,7 +42,10 @@ from queue import Empty
 from soco.events import event_listener
 import soco # type: ignore
 
-BUILD = "0.0.27"
+BUILD = "0.1.0"  # Major release: Command-queue architecture with hyper-aggressive playback controller
+
+# Feature flag for new controller (set to "true" to enable)
+USE_NEW_CONTROLLER = os.getenv("USE_NEW_CONTROLLER", "true").lower() in ("true", "1", "yes")
 
 # Defaults
 APIPORT = 8001
@@ -50,13 +53,15 @@ MEDIAPORT = 54000
 DEBUGMODE = False
 MEDIAPATH = "/Volumes/Plex"  # Location of media files
 MAXPAYLOAD = 4000            # Reject payload if above this size
-DROPPREFIX = "/media"        # Optional - Omit media filename prefix
+DROPPREFIX = ["/media"]      # Optional - Omit media filename prefix(es)
 
 # Environment config
 M3UPATH = os.getenv("M3UPATH", MEDIAPATH) 
 MEDIAPATH = os.getenv("MEDIAPATH", MEDIAPATH)
 MEDIAHOST = os.getenv("MEDIAHOST", None)
-DROPPREFIX = os.getenv("DROPPREFIX", DROPPREFIX)
+# Parse DROPPREFIX as comma-separated list
+dropprefix_env = os.getenv("DROPPREFIX", ",".join(DROPPREFIX))
+DROPPREFIX = [prefix.strip() for prefix in dropprefix_env.split(",") if prefix.strip()]
 DEBUGMODE = os.getenv("DEBUGMODE", str(DEBUGMODE)).lower() in ("true", "1", "yes")
 
 # Static Assets
@@ -138,6 +143,53 @@ sse_state = {
 sonos = list(soco.discover())[0]
 sonos = sonos.group.coordinator
 zone = sonos.ip_address
+
+# Initialize new controller architecture if enabled
+controller = None
+adapter = None
+
+if USE_NEW_CONTROLLER:
+    try:
+        from src.controller import PlaybackController
+        from src.adapter import ControllerAdapter
+        
+        log.info("=" * 60)
+        log.info("NEW CONTROLLER ARCHITECTURE ENABLED")
+        log.info("=" * 60)
+        
+        # Create controller
+        controller = PlaybackController(
+            sonos=sonos,
+            db=db,
+            db_songkey=db_songkey,
+            mediahost=MEDIAHOST if MEDIAHOST else socket.gethostbyname(socket.gethostname()),
+            mediaport=MEDIAPORT,
+            mediapath=MEDIAPATH
+        )
+        
+        # Create adapter for backward compatibility
+        adapter = ControllerAdapter(controller)
+        
+        # Start controller thread
+        controller.start()
+        
+        # Connect SSE callbacks for real-time client updates
+        controller.on_track_changed = lambda data: sse_broadcast('track_changed', data)
+        controller.on_queue_changed = lambda data: sse_broadcast('queue_changed', data)
+        controller.on_state_changed = lambda data: sse_broadcast('playback_state', data)
+        controller.on_volume_changed = lambda data: sse_broadcast('volume_changed', data)
+        
+        log.info("PlaybackController: Started successfully")
+        log.info("Adapter: Created for backward compatibility")
+        log.info("SSE Callbacks: Connected to controller")
+        log.info("=" * 60)
+        
+    except Exception as e:
+        log.error(f"Failed to initialize new controller: {e}")
+        log.error("Falling back to legacy architecture")
+        USE_NEW_CONTROLLER = False
+        controller = None
+        adapter = None
 
 # Helpful Functions
 
@@ -294,9 +346,14 @@ class mediahandler(RangeRequestHandler):
 
     def do_GET(self):
         log.debug("GET - Path = {}".format(self.path))
-        #self.path = requests.utils.unquote(self.path.replace(DROPPREFIX, MEDIAPATH))
-        self.path = self.path.replace(DROPPREFIX, "")
-        log.debug("    - converted Path = {}".format(self.path))
+        # Remove any matching prefix from DROPPREFIX array
+        original_path = self.path
+        for prefix in DROPPREFIX:
+            if self.path.startswith(prefix):
+                self.path = self.path[len(prefix):]
+                break
+        if original_path != self.path:
+            log.debug("    - converted Path = {}".format(self.path))
         try:
             super().do_GET()
         except Exception as e:
@@ -334,6 +391,7 @@ class apihandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global musicqueue, zone, sonos, shuffle, repeat, state, stop, playing
         global db, db_added, db_albums, db_artists, db_songs, db_songkey, db_filetime
+        global controller, adapter, serverstats, USE_NEW_CONTROLLER
         self.send_response(200)
         message = json.dumps({"Response": "OK"})
         contenttype = 'application/json'
@@ -398,18 +456,48 @@ class apihandler(BaseHTTPRequestHandler):
         elif self.path == '/location':
             # Give location in song
             c = sonos.get_current_track_info()
+            
+            # Get actual Sonos hardware state
+            sonos_transport_state = sonos.get_current_transport_info()['current_transport_state']
+            c['sonos_state'] = sonos_transport_state
+            
+            # Override state and album_art with controller data if using new controller
+            if USE_NEW_CONTROLLER and adapter:
+                full_state = adapter.get_full_state()
+                c['state'] = full_state['state']
+                # Use controller's album_art if we're managing playback
+                # Otherwise keep Sonos's album_art (for external sources like Alexa, Apple Music)
+                if full_state['playing'] and 'album_art' in full_state['playing']:
+                    c['album_art'] = full_state['playing']['album_art']
+            
             message = json.dumps(c)
         elif self.path == '/queuedepth':
-            # Give Internal Stats
-            message = json.dumps({"queuedepth": len(musicqueue)})
+            # Give queue depth
+            if USE_NEW_CONTROLLER and adapter:
+                message = json.dumps({"queuedepth": len(adapter.get_queue_copy())})
+            else:
+                message = json.dumps({"queuedepth": len(musicqueue)})
         elif self.path== '/state':
-            s = {}
-            s['state'] = state
-            s['zone'] = zone
-            s['repeat'] = repeat
-            s['shuffle'] = shuffle
-            s['volume'] = sonos.group.volume
-            message = json.dumps(s)
+            if USE_NEW_CONTROLLER and adapter:
+                # Get state from controller
+                full_state = adapter.get_full_state()
+                s = {
+                    'state': full_state['state'],
+                    'zone': zone,
+                    'repeat': full_state['repeat'],
+                    'shuffle': full_state['shuffle'],
+                    'volume': sonos.group.volume
+                }
+                message = json.dumps(s)
+            else:
+                # Legacy path
+                s = {}
+                s['state'] = state
+                s['zone'] = zone
+                s['repeat'] = repeat
+                s['shuffle'] = shuffle
+                s['volume'] = sonos.group.volume
+                message = json.dumps(s)
         elif self.path == '/speakers':
             # List of Sonos Speakers
             log.debug("speakers: Getting speaker list")
@@ -515,27 +603,57 @@ class apihandler(BaseHTTPRequestHandler):
             message = "OK"
         elif self.path.startswith('/setzone/'):
             zone = self.path.split('/setzone/')[1]
-            message = "OK"
+            try:
+                # Switch to the specified coordinator
+                sonos = soco.SoCo(zone)
+                log.info(f"Switched coordinator to {zone} ({sonos.player_name})")
+                message = json.dumps({"Response": "OK", "coordinator": zone, "name": sonos.player_name})
+            except Exception as e:
+                log.error(f"Failed to switch to zone {zone}: {e}")
+                message = json.dumps({"Error": str(e)})
         elif self.path == '/stats':
             # Give Internal Stats
             serverstats['ts'] = int(time.time())
             serverstats['mem'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            
+            # Add controller stats if using new architecture
+            if USE_NEW_CONTROLLER and controller:
+                serverstats['controller'] = controller.get_stats()
+                serverstats['controller_enabled'] = True
+            else:
+                serverstats['controller_enabled'] = False
+            
             message = json.dumps(serverstats)
         elif self.path == '/queue':
-            # Give Internal Stats
-            message = json.dumps(musicqueue)
+            # Return current queue
+            if USE_NEW_CONTROLLER and adapter:
+                message = json.dumps(adapter.get_queue_copy())
+            else:
+                message = json.dumps(musicqueue)
         elif self.path == '/queue/clear':
             # Clear current queue
-            musicqueue = []
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_clear_queue()
+            else:
+                musicqueue = []
         elif self.path== '/play':
-            stop = False
-            sonos.play()
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_play()
+            else:
+                stop = False
+                sonos.play()
         elif self.path== '/pause':
-            stop = True
-            sonos.pause()
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_pause()
+            else:
+                stop = True
+                sonos.pause()
         elif self.path== '/stop':
-            stop = True
-            sonos.stop()
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_stop()
+            else:
+                stop = True
+                sonos.stop()
         elif self.path== '/disconnect':
             # Disconnect from external music sources by stopping and clearing queue
             try:
@@ -544,13 +662,21 @@ class apihandler(BaseHTTPRequestHandler):
             except Exception as e:
                 log.debug(f"Disconnect: {e}")
         elif self.path== '/volumeup':
-            sonos.group.volume = sonos.group.volume + 1
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_volume_up()
+            else:
+                sonos.group.volume = sonos.group.volume + 1
         elif self.path== '/volumedown':
-            sonos.group.volume = sonos.group.volume - 1
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_volume_down()
+            else:
+                sonos.group.volume = sonos.group.volume - 1
         elif self.path== '/next':
-            if len(musicqueue) > 0 :
-                # Immediately play next song from queue
-                # Pop next song and play it immediately (don't wait for jukebox thread)
+            if USE_NEW_CONTROLLER and adapter:
+                # Use new controller - no race conditions!
+                adapter.enqueue_next()
+            elif len(musicqueue) > 0:
+                # Legacy code path
                 playing = musicqueue.pop(0)
                 if repeat:
                     musicqueue.append(playing)
@@ -572,7 +698,9 @@ class apihandler(BaseHTTPRequestHandler):
                 playing = {}
                 message = json.dumps({"Response": "Sent Next - Playlist Empty"})
         elif self.path== '/prev':
-            if len(musicqueue) < 1:
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_prev()
+            elif len(musicqueue) < 1:
                 # nothing in queue, just send prev command
                 sonos.previous()
             else:
@@ -580,9 +708,15 @@ class apihandler(BaseHTTPRequestHandler):
                 sonos.play_uri(playing['path'])
                 stop = False
         elif self.path=='/toggle/repeat':
-            repeat = not repeat
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_toggle_repeat()
+            else:
+                repeat = not repeat
         elif self.path=='/toggle/shuffle':
-            shuffle = not shuffle
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_toggle_shuffle()
+            else:
+                shuffle = not shuffle
         elif self.path== '/rescan':
             # rescan/rediscover sonos system zones
             sonos = list(soco.discover())[0]
@@ -594,7 +728,10 @@ class apihandler(BaseHTTPRequestHandler):
             s['uid'] = sonos.uid
             message = json.dumps(s)
         elif self.path=='/playing':
-            message = json.dumps(playing)
+            if USE_NEW_CONTROLLER and adapter:
+                message = json.dumps(adapter.get_playing_copy())
+            else:
+                message = json.dumps(playing)
         elif self.path == '/listm3u' or self.path == '/playlists':
             # List all m3u files in M3UPATH
             message = json.dumps(list_m3u(M3UPATH))
@@ -613,27 +750,59 @@ class apihandler(BaseHTTPRequestHandler):
             songs = []
             for item in playlist:
                 songs.append(item)
-            if shuffle:
-                random.shuffle(songs)
-            for item in songs:
-                song = {}
-                song['id'] = item['id']
-                song['title'] = item['title']
-                song['artist'] = item['artist']
-                song['length'] = item['length']
-                song['album'] = item['album']
-                song['albumartist'] = item['albumartist']
-                song['path'] = "http://%s:%d%s" % (MEDIAHOST,
-                    MEDIAPORT, requests.utils.quote(item['path']))
-                album_art = None
-                if item['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, item['akey'])):
-                    album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
-                        MEDIAPORT, item['akey'])
-                song['album_art'] = album_art
-                song['akey'] = item['akey']
-                song['skey'] = item['skey']
-                musicqueue.append(song)
-            message = json.dumps({"Response": "Added {} Songs".format(len(songs))})
+            
+            if USE_NEW_CONTROLLER and adapter:
+                # Use controller - it will handle shuffle internally based on current setting
+                should_shuffle = adapter.shuffle
+                if should_shuffle:
+                    random.shuffle(songs)
+                
+                # Build song list for controller
+                formatted_songs = []
+                for item in songs:
+                    song = {}
+                    song['id'] = item['id']
+                    song['title'] = item['title']
+                    song['artist'] = item['artist']
+                    song['length'] = item['length']
+                    song['album'] = item['album']
+                    song['albumartist'] = item['albumartist']
+                    song['path'] = "http://%s:%d%s" % (MEDIAHOST,
+                        MEDIAPORT, requests.utils.quote(item['path']))
+                    album_art = None
+                    if item['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, item['akey'])):
+                        album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
+                            MEDIAPORT, item['akey'])
+                    song['album_art'] = album_art
+                    song['akey'] = item['akey']
+                    song['skey'] = item['skey']
+                    formatted_songs.append(song)
+                
+                adapter.enqueue_add_songs(formatted_songs)
+                message = json.dumps({"Response": "Added {} Songs".format(len(formatted_songs))})
+            else:
+                # Legacy path
+                if shuffle:
+                    random.shuffle(songs)
+                for item in songs:
+                    song = {}
+                    song['id'] = item['id']
+                    song['title'] = item['title']
+                    song['artist'] = item['artist']
+                    song['length'] = item['length']
+                    song['album'] = item['album']
+                    song['albumartist'] = item['albumartist']
+                    song['path'] = "http://%s:%d%s" % (MEDIAHOST,
+                        MEDIAPORT, requests.utils.quote(item['path']))
+                    album_art = None
+                    if item['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, item['akey'])):
+                        album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
+                            MEDIAPORT, item['akey'])
+                    song['album_art'] = album_art
+                    song['akey'] = item['akey']
+                    song['skey'] = item['skey']
+                    musicqueue.append(song)
+                message = json.dumps({"Response": "Added {} Songs".format(len(songs))})
         elif self.path.startswith('/addsong/'):
             # Load single song into queue - key in URI
             key = self.path.split('/addsong/')[1]
@@ -658,7 +827,12 @@ class apihandler(BaseHTTPRequestHandler):
                 album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
                     MEDIAPORT, song['akey'])
             song['album_art'] = album_art
-            musicqueue.append(song)
+            
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_add_songs([song])
+            else:
+                musicqueue.append(song)
+            
             message = json.dumps({"Response": "Added 1 Song"})
         elif self.path.startswith('/playfile/'):
             # Load single song into queue - file in URI
@@ -668,7 +842,12 @@ class apihandler(BaseHTTPRequestHandler):
             #fn = requests.utils.unquote(self.path.split('/play_file/')[1])
             log.debug("Add PlayFile: {}".format(playfile))
             song['path'] = "http://%s:%d/%s" % (MEDIAHOST, MEDIAPORT, playfile)
-            musicqueue.append(song)
+            
+            if USE_NEW_CONTROLLER and adapter:
+                adapter.enqueue_add_songs([song])
+            else:
+                musicqueue.append(song)
+            
             message = json.dumps({"Response": "Added 1 Song"})
         # TODO
         # elif self.path == '/select/albums':
@@ -722,30 +901,36 @@ class apihandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/albumadd/"):
             album_id = self.path.split('/albumadd/')[1]
             if album_id.isdigit() and str(album_id) in db:
-                # Load album of songs into queue - from db
-                akey = db[str(album_id)]["key"]
-                count = 0
-                for item in db[str(album_id)]["tracks"]:
-                    song = {}
-                    s = db[str(album_id)]["tracks"][item]
-                    song['title'] = s["song"]
-                    song['artist'] = s['artist']
-                    song['length'] = s['length']
-                    song['album'] = db[str(album_id)]['title']
-                    song['albumartist'] = db[str(album_id)]['artist']
-                    song['path'] = "http://%s:%d%s" % (MEDIAHOST,
-                        MEDIAPORT, requests.utils.quote(s['path'][0]))
-                    album_art = None
-                    if akey and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, akey)):
-                        album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
-                            MEDIAPORT, akey)
-                    song['album_art'] = album_art
-                    song['akey'] = akey
-                    song['skey'] = s["key"]
-                    musicqueue.append(song)
-                    count += 1
-                message = json.dumps({"Response": "Added %d Songs" % count})
-
+                if USE_NEW_CONTROLLER and adapter:
+                    # Use new controller - just enqueue command
+                    adapter.enqueue_add_album(album_id)
+                    # Get count from db for response
+                    count = len(db[str(album_id)]["tracks"])
+                    message = json.dumps({"Response": "Added %d Songs" % count})
+                else:
+                    # Legacy code path - Load album of songs into queue
+                    akey = db[str(album_id)]["key"]
+                    count = 0
+                    for item in db[str(album_id)]["tracks"]:
+                        song = {}
+                        s = db[str(album_id)]["tracks"][item]
+                        song['title'] = s["song"]
+                        song['artist'] = s['artist']
+                        song['length'] = s['length']
+                        song['album'] = db[str(album_id)]['title']
+                        song['albumartist'] = db[str(album_id)]['artist']
+                        song['path'] = "http://%s:%d%s" % (MEDIAHOST,
+                            MEDIAPORT, requests.utils.quote(s['path'][0]))
+                        album_art = None
+                        if akey and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, akey)):
+                            album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
+                                MEDIAPORT, akey)
+                        song['album_art'] = album_art
+                        song['akey'] = akey
+                        song['skey'] = s["key"]
+                        musicqueue.append(song)
+                        count += 1
+                    message = json.dumps({"Response": "Added %d Songs" % count})
             else:
                 message = json.dumps(None)   
         elif self.path == "/db":
@@ -1060,8 +1245,14 @@ if __name__ == "__main__":
     # creating thread
     apiServer = threading.Thread(target=api, args=(APIPORT,))
     mediaServer = threading.Thread(target=media, args=(MEDIAPORT,))
-    jb = threading.Thread(target=jukebox)
-    sseMonitor = threading.Thread(target=sse_monitor)
+    
+    # Legacy threads - only used when new controller is disabled
+    if not USE_NEW_CONTROLLER:
+        jb = threading.Thread(target=jukebox)
+        sseMonitor = threading.Thread(target=sse_monitor)
+        log.info("Legacy Mode: Jukebox and SSE Monitor threads will start")
+    else:
+        log.info("New Controller Mode: Jukebox handled by PlaybackController")
     
     log.info(
         "TinySonos [v%s - SoCo %s] - Web Based Sonos Controller and Jukebox"
@@ -1074,8 +1265,11 @@ if __name__ == "__main__":
     # start threads
     apiServer.start()
     mediaServer.start()
-    jb.start()
-    sseMonitor.start()
+    
+    # Only start legacy threads if not using new controller
+    if not USE_NEW_CONTROLLER:
+        jb.start()
+        sseMonitor.start()
 
     log.info(" - API Endpoint on http://%s:%d" % (MEDIAHOST, APIPORT))
     log.info(" - Media Endpoint on http://%s:%d" % (MEDIAHOST, MEDIAPORT))

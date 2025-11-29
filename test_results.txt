@@ -1,0 +1,39 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.10.12, pytest-9.0.1, pluggy-1.6.0 -- /Users/jason/Code/TinySonos/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/jason/Code/TinySonos
+configfile: pytest.ini
+plugins: mock-3.15.1, timeout-2.4.0, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=strict, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 19 items
+
+tests/test_commands.py::TestCommand::test_command_creation PASSED        [  5%]
+tests/test_commands.py::TestCommand::test_command_with_data PASSED       [ 10%]
+tests/test_commands.py::TestCommand::test_command_with_callback PASSED   [ 15%]
+tests/test_commands.py::TestCommand::test_command_timestamp PASSED       [ 21%]
+tests/test_commands.py::TestCommand::test_command_repr FAILED            [ 26%]
+tests/test_commands.py::TestCommandQueue::test_queue_creation PASSED     [ 31%]
+tests/test_commands.py::TestCommandQueue::test_put_and_get PASSED        [ 36%]
+tests/test_commands.py::TestCommandQueue::test_multiple_commands PASSED  [ 42%]
+tests/test_commands.py::TestCommandQueue::test_queue_stats PASSED        [ 47%]
+tests/test_commands.py::TestCommandQueue::test_mark_error PASSED         [ 52%]
+tests/test_commands.py::TestCommandQueue::test_reset_stats PASSED        [ 57%]
+tests/test_commands.py::TestCommandQueue::test_thread_safety PASSED      [ 63%]
+tests/test_commands.py::TestCommandQueue::test_timeout_on_empty_queue PASSED [ 68%]
+tests/test_commands.py::TestCommandQueue::test_maxsize_limit PASSED      [ 73%]
+tests/test_commands.py::TestCommandFactory::test_create_command_without_data PASSED [ 78%]
+tests/test_commands.py::TestCommandFactory::test_create_command_with_data PASSED [ 84%]
+tests/test_commands.py::TestCommandFactory::test_create_command_kwargs PASSED [ 89%]
+tests/test_commands.py::TestCommandTypes::test_all_command_types_accessible PASSED [ 94%]
+tests/test_commands.py::TestCommandTypes::test_command_type_values PASSED [100%]
+
+=================================== FAILURES ===================================
+________________________ TestCommand.test_command_repr _________________________
+tests/test_commands.py:50: in test_command_repr
+    assert "NEXT" in repr(cmd1)
+E   AssertionError: assert 'NEXT' in 'Command(next)'
+E    +  where 'Command(next)' = repr(Command(next))
+=========================== short test summary info ============================
+FAILED tests/test_commands.py::TestCommand::test_command_repr - AssertionError: assert 'NEXT' in 'Command(next)'
+ +  where 'Command(next)' = repr(Command(next))
+========================= 1 failed, 18 passed in 0.15s =========================
