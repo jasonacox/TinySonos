@@ -27,6 +27,34 @@ Credits:
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <title>TinySonos API Server</title>
+    <!-- Inline safe dark-mode overrides (ensures readable text if stylesheet is out-of-sync) -->
+    <style>
+    :root[data-theme="dark"], [data-theme="dark"] {
+        --ts-text: #e6e9eb;
+        --ts-muted: #9aa0a6;
+        --ts-surface: #0f1316;
+        --ts-accent: #9b4b4f;
+        --ts-link: #9aa0a6;
+    }
+    [data-theme="dark"] body,
+    [data-theme="dark"] .sonostitle,
+    [data-theme="dark"] .title,
+    [data-theme="dark"] .album,
+    [data-theme="dark"] .artist,
+    [data-theme="dark"] p,
+    [data-theme="dark"] .menu-left p,
+    [data-theme="dark"] .menu-right,
+    [data-theme="dark"] .menutitle,
+    [data-theme="dark"] .menunumber {
+        color: var(--ts-text) !important;
+    }
+    [data-theme="dark"] a { color: var(--ts-link) !important; }
+    [data-theme="dark"] .menu-row,
+    [data-theme="dark"] .player,
+    [data-theme="dark"] .queue,
+    [data-theme="dark"] .system,
+    [data-theme="dark"] .control-panel { background: var(--ts-surface) !important; }
+    </style>
     <script>
     // Globals
     let lastnumq = 0;  // last number of songs in queue
@@ -264,16 +292,20 @@ Credits:
                 }
             }
             // Update volume
-            document.getElementById('volume').textContent = data.volume;
-            document.getElementById('volume-slider').value = data.volume;
+            const volEl = document.getElementById('volume');
+            if (volEl) volEl.textContent = data.volume;
+            const volSliderEl = document.getElementById('volume-slider');
+            if (volSliderEl) volSliderEl.value = data.volume;
             currentZone = data.zone;
         });
         
         eventSource.addEventListener('volume_changed', (e) => {
             const data = JSON.parse(e.data);
             console.log('SSE: Volume changed', data.volume);
-            document.getElementById('volume').textContent = data.volume;
-            document.getElementById('volume-slider').value = data.volume;
+            const volEl2 = document.getElementById('volume');
+            if (volEl2) volEl2.textContent = data.volume;
+            const volSliderEl2 = document.getElementById('volume-slider');
+            if (volSliderEl2) volSliderEl2.value = data.volume;
         });
         
         eventSource.addEventListener('speakers_changed', (e) => {
@@ -319,7 +351,21 @@ Credits:
     // Helper function to update speaker table from SSE data
     function updateSpeakerTable(data) {
         let table = "<table style='margin-left: 10px;'>";
-        for (let name in data) {
+
+        // Main Volume row first
+        table += "<tr class='main-volume-row'>";
+        table += "<td>Main Volume</td>";
+        table += "<td></td><td></td>";
+        table += "<td><label for='volume-slider'></label></td>";
+        table += "<td><input type='range' id='volume-slider' class='vol-slider' min='0' max='50' value='0' step='1' oninput=\"updateVolumeDisplay(this.value)\" onchange=\"updateVolume(this.value)\"></td>";
+        table += "<td><span id='volume'>0</span></td>";
+        table += "<td><button title='Volume up' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)+1; updateVolume(v);})()\">▲</button></td>";
+        table += "<td><button title='Volume down' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)-1; updateVolume(v);})()\">▼</button></td>";
+        table += "</tr>";
+
+        const names = Object.keys(data).sort((a,b) => a.localeCompare(b));
+        for (let i = 0; i < names.length; i++) {
+            const name = names[i];
             const speaker = data[name];
             const coord = speaker.coordinator ? '*' : ' ';
             const ip = speaker.ip;
@@ -340,6 +386,7 @@ Credits:
             table += "<td><button title='Volume down' onclick=\"updateVolumeclick(-1,'" + ip + "')\">▼</button></td>";
             table += "</tr>";
         }
+
         table += "</table>";
         document.querySelector(".speakers").innerHTML = table;
     }
@@ -560,9 +607,11 @@ Credits:
             }
             lastzone = data.zone;
             currentZone = data.zone;
-            
-            document.getElementById('volume').textContent = data.volume;
-            document.getElementById('volume-slider').value = data.volume;
+
+            const volEl = document.getElementById('volume');
+            if (volEl) volEl.textContent = data.volume;
+            const volSliderEl = document.getElementById('volume-slider');
+            if (volSliderEl) volSliderEl.value = data.volume;
             
         } catch (error) {
             handleApiError(error, 'Get state');
@@ -576,7 +625,22 @@ Credits:
         const response = await fetch(getApiUrl('speakers'));
         const data = await response.json();
         let table = "<table style='margin-left: 10px;'>";
-        for (let x in data) {
+
+        // Main Volume row first
+        table += "<tr class='main-volume-row'>";
+        table += "<td>Main Volume</td>";
+        table += "<td></td><td></td>";
+        table += "<td><label for='volume-slider'></label></td>";
+        table += "<td><input type='range' id='volume-slider' class='vol-slider' min='0' max='50' value='0' step='1' oninput=\"updateVolumeDisplay(this.value)\" onchange=\"updateVolume(this.value)\"></td>";
+        table += "<td><span id='volume'>0</span></td>";
+        table += "<td><button title='Volume up' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)+1; updateVolume(v);})()\">▲</button></td>";
+        table += "<td><button title='Volume down' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)-1; updateVolume(v);})()\">▼</button></td>";
+        table += "</tr>";
+
+        // Render speakers sorted alphabetically by display name
+        const keys = Object.keys(data).sort((a,b) => a.localeCompare(b));
+        for (let i = 0; i < keys.length; i++) {
+            const x = keys[i];
             const coord = data[x].coordinator ? '*' : ' ';
             const ip = data[x].ip;
             const joinAction = data[x].state ? "speaker_unjoin" : "speaker_join";
@@ -596,6 +660,7 @@ Credits:
             table += "<td><button title='Volume down' onclick=\"updateVolumeclick(-1,'" + ip + "')\">▼</button></td>"; // Down button
             table += "</tr>";
         }
+
         table += "</table>";
 
         document.querySelector(".speakers").innerHTML = table;
@@ -1165,13 +1230,6 @@ Credits:
         
         <div class="datacolumn">
             <div class="system">
-                <div id="volume-container">
-                    <label for="volume-slider">Main Volume <a href="#" class="volume-mute-link" onclick="javascript:myclick('volume/mute');" title="Mute">🔇</a></label>
-                    <input type="range" id="volume-slider" class="vol-slider" min="0" max="50" value="0" step="1" oninput="updateVolumeDisplay(this.value)" onchange="updateVolume(this.value)">
-                    <span id="volume">0</span>
-                </div>
-                <!-- <span>Speaker Volume:</b> <b class="volume">0</b> [<a href="#" onclick="javascript:myclick('volume/up');"> Up+ </a>  
-                    / <a href="#" onclick="javascript:myclick('volume/down');"> Down- </a>]</span> -->
                 <span class="speakers">Unknown</span>
             </div>
             <!-- Thin control panel placed under speaker list -->
@@ -1185,7 +1243,7 @@ Credits:
                     <button id="repeat" class="toggle" onclick="javascript:myclick('toggle/repeat');" aria-pressed="false" title="Repeat">Repeat</button>
                     <button id="shuffle" class="toggle" onclick="javascript:myclick('toggle/shuffle');" aria-pressed="false" title="Shuffle">Shuffle</button>
                     <!-- theme toggle removed -->
-                    <button class="ctrl danger" onclick="javascript:myclick('disconnect');" title="Disconnect">⛔</button>
+                    <button class="ctrl" onclick="javascript:myclick('disconnect');" title="Disconnect" aria-label="Disconnect">⏏</button>
                 </div>
             </div>
 
