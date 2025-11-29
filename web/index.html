@@ -12,8 +12,8 @@ For more information see https://github.com/jasonacox/tinysonos
 
 Credits:
 * This Player UI code based on the great work by Annie Wu, 
-  https://github.com/anniedotexe/music-player with custom SVG Paths 
-  created at https://yqnn.github.io/svg-path-editor/ 
+  https://github.com/anniedotexe/music-player
+* Custom SVG Paths created at https://yqnn.github.io/svg-path-editor/ 
 
 -->
 <html lang="en">
@@ -190,6 +190,76 @@ Credits:
     let sseConnected = false;
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 5;
+
+    // Client-side playback state for smooth time interpolation
+    let playbackState = {
+        position: 0,        // Current position in seconds
+        duration: 0,        // Track duration in seconds
+        lastSync: 0,        // Timestamp of last server sync
+        isPlaying: false,   // Playback state
+        intervalId: null    // Timer reference
+    };
+
+    function startPlaybackTimer() {
+        if (playbackState.intervalId) return; // Already running
+        
+        playbackState.intervalId = setInterval(() => {
+            if (playbackState.isPlaying && playbackState.position < playbackState.duration) {
+                playbackState.position += 1;
+                updateProgressDisplay();
+            }
+        }, 1000);
+    }
+
+    function updateProgressDisplay() {
+        const currentEl = document.querySelector("#current-time");
+        const sliderEl = document.querySelector("#seek-slider");
+        
+        if (currentEl) {
+            currentEl.innerHTML = formatTime(playbackState.position);
+        }
+        if (sliderEl && playbackState.duration > 0) {
+            sliderEl.value = (100 * playbackState.position) / playbackState.duration;
+        }
+    }
+
+    function formatTime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    }
+
+    function syncPosition(positionStr, durationStr, state) {
+        // Parse server time to seconds
+        const parseTime = (str) => {
+            const parts = str.split(':');
+            return (+parts[0]) * 3600 + (+parts[1]) * 60 + (+parts[2]);
+        };
+        
+        const serverPosition = parseTime(positionStr);
+        const serverDuration = parseTime(durationStr);
+        const serverIsPlaying = (state === 'PLAYING' || state === 'TRANSITIONING');
+        
+        // Only sync if difference is significant (> 2 seconds) or state changed
+        // This prevents slider from bouncing on minor timing differences
+        const drift = Math.abs(serverPosition - playbackState.position);
+        const stateChanged = (serverIsPlaying !== playbackState.isPlaying);
+        const durationChanged = (serverDuration !== playbackState.duration);
+        
+        if (drift > 2 || stateChanged || durationChanged) {
+            playbackState.position = serverPosition;
+            playbackState.duration = serverDuration;
+            playbackState.isPlaying = serverIsPlaying;
+            playbackState.lastSync = Date.now();
+            
+            updateProgressDisplay();
+            
+            // Update duration display (only changes on track change)
+            const durationEl = document.querySelector("#duration");
+            if (durationEl) durationEl.innerHTML = durationStr;
+        }
+    }
     
     function connectSSE() {
         if (!sseEnabled) return;
@@ -205,7 +275,7 @@ Credits:
         console.log('SSE: Connecting to event stream...');
         eventSource = new EventSource(getApiUrl('events'));
         
-        eventSource.addEventListener('connected', (e) => {
+        eventSource.addEventListener('connected', async (e) => {
             console.log('SSE: Connected to server');
             reconnectAttempts = 0;
             consecutiveFailures = 0; // Reset failure counter on successful SSE connection
@@ -217,33 +287,93 @@ Credits:
             }
             
             displayNotification('Real-time updates connected');
+            
+            // Initial data fetch on connection
+            try {
+                // Fetch current state
+                const stateResponse = await fetch(getApiUrl('state'));
+                const stateData = await stateResponse.json();
+                
+                // Fetch speakers
+                const speakersResponse = await fetch(getApiUrl('speakers'));
+                const speakersData = await speakersResponse.json();
+                updateSpeakerTable(speakersData, stateData.volume || 0);
+                
+                // Fetch queue
+                queuelist();
+            } catch (error) {
+                console.error('Error fetching initial data:', error);
+            }
         });
         
         eventSource.addEventListener('track_changed', (e) => {
             const data = JSON.parse(e.data);
             console.log('SSE: Track changed', data);
+            console.log('SSE: Album art URL:', data.album_art);
+            console.log('SSE: Album art type:', typeof data.album_art);
+            console.log('SSE: Album art length:', data.album_art ? data.album_art.length : 0);
+            
             // Update UI with new track info
+            console.log('Track info - Title:', data.title, 'Album:', data.album, 'Artist:', data.artist);
             document.querySelector(".title").innerHTML = data.title;
             document.querySelector(".artist").innerHTML = data.artist;
             document.querySelector(".album").innerHTML = data.album;
-            document.querySelector("#current-time").innerHTML = data.position;
-            document.querySelector("#duration").innerHTML = data.duration;
-            // Update album art immediately
+            
+            // Sync client-side timer with server position
+            if (data.position && data.duration) {
+                syncPosition(data.position, data.duration, data.state || 'PLAYING');
+            }
+            
+            // Update album art with preloading for smooth transition
             const albumArtElem = document.querySelector('#album_art');
-            if(data.album_art && albumArtElem.getAttribute("src") != data.album_art) {
-                albumArtElem.setAttribute('src', data.album_art);
-                const styleElem = document.head.appendChild(document.createElement("style"));
-                styleElem.innerHTML = "body::before {background: url(" + data.album_art + ");}";  
-            } else if(!data.album_art && albumArtElem.getAttribute("src") != '/notitle.png') {
-                albumArtElem.setAttribute('src', '/notitle.png');
+            console.log('Current album art src:', albumArtElem.src);
+            
+            if(data.album_art) {
+                console.log('Album art URL found, attempting to load:', data.album_art);
+                // Normalize URLs for comparison
+                const currentSrc = albumArtElem.src;
+                const newSrc = data.album_art.startsWith('http') ? data.album_art : window.location.origin + data.album_art;
+                
+                console.log('Current src:', currentSrc);
+                console.log('New src (normalized):', newSrc);
+                
+                if(currentSrc !== newSrc) {
+                    console.log('URLs differ, updating album art...');
+                    const preload = new Image();
+                    preload.onload = () => {
+                        console.log('Album art loaded successfully:', data.album_art);
+                        albumArtElem.src = data.album_art;
+                        const styleElem = document.head.appendChild(document.createElement("style"));
+                        styleElem.innerHTML = "body::before {background: url(" + data.album_art + ");}";
+                    };
+                    preload.onerror = () => {
+                        console.error('Album art failed to load:', data.album_art);
+                        albumArtElem.src = '/notitle.png';
+                        const styleElem = document.head.appendChild(document.createElement("style"));
+                        styleElem.innerHTML = "body::before {background: url(/notitle.png);}";
+                    };
+                    preload.src = data.album_art;
+                } else {
+                    console.log('Album art URLs match, no update needed');
+                }
+            } else {
+                console.log('No album art URL provided, using notitle.png');
+                albumArtElem.src = '/notitle.png';
                 const styleElem = document.head.appendChild(document.createElement("style"));
                 styleElem.innerHTML = "body::before {background: url(/notitle.png);}";
             }
-        });
-        
-        eventSource.addEventListener('playback_state', (e) => {
+        });        eventSource.addEventListener('playback_state', (e) => {
             const data = JSON.parse(e.data);
             console.log('SSE: Playback state changed', data.state);
+            
+            // Update client-side play state
+            playbackState.isPlaying = (data.state === 'PLAYING' || data.state === 'TRANSITIONING');
+            
+            // Sync position if provided
+            if (data.position && data.duration) {
+                syncPosition(data.position, data.duration, data.state);
+            }
+            
             // Update play/pause/stop buttons
             if(data.state == "PLAYING" || data.state == "TRANSITIONING") {
                 document.getElementById("pause").classList='play-pause active';
@@ -308,11 +438,21 @@ Credits:
             if (volSliderEl2) volSliderEl2.value = data.volume;
         });
         
-        eventSource.addEventListener('speakers_changed', (e) => {
+        eventSource.addEventListener('speakers_changed', async (e) => {
             const data = JSON.parse(e.data);
             console.log('SSE: Speakers configuration changed');
-            // Rebuild speaker table
-            updateSpeakerTable(data);
+            // Fetch main volume to pass to speaker table
+            try {
+                const stateResponse = await fetch(getApiUrl('state'));
+                const stateData = await stateResponse.json();
+                const mainVolume = stateData.volume || 0;
+                // Rebuild speaker table with main volume
+                updateSpeakerTable(data, mainVolume);
+            } catch (error) {
+                console.error('Error fetching main volume:', error);
+                // Fallback: rebuild speaker table without main volume
+                updateSpeakerTable(data, 0);
+            }
         });
         
         eventSource.addEventListener('queue_changed', (e) => {
@@ -349,7 +489,7 @@ Credits:
     }
     
     // Helper function to update speaker table from SSE data
-    function updateSpeakerTable(data) {
+    function updateSpeakerTable(data, mainVolume = 0) {
         let table = "<table style='margin-left: 10px;'>";
 
         // Main Volume row first
@@ -357,8 +497,8 @@ Credits:
         table += "<td>Main Volume</td>";
         table += "<td></td><td></td>";
         table += "<td><label for='volume-slider'></label></td>";
-        table += "<td><input type='range' id='volume-slider' class='vol-slider' min='0' max='50' value='0' step='1' oninput=\"updateVolumeDisplay(this.value)\" onchange=\"updateVolume(this.value)\"></td>";
-        table += "<td><span id='volume'>0</span></td>";
+        table += "<td><input type='range' id='volume-slider' class='vol-slider' min='0' max='50' value='" + mainVolume + "' step='1' oninput=\"updateVolumeDisplay(this.value)\" onchange=\"updateVolume(this.value)\"></td>";
+        table += "<td><span id='volume'>" + mainVolume + "</span></td>";
         table += "<td><button title='Volume up' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)+1; updateVolume(v);})()\">▲</button></td>";
         table += "<td><button title='Volume down' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)-1; updateVolume(v);})()\">▼</button></td>";
         table += "</tr>";
@@ -454,15 +594,8 @@ Credits:
                 consecutiveFailures = 0;
             }
             
-            // current location and duration
-            document.querySelector("#current-time").innerHTML = data.position;
-            document.querySelector("#duration").innerHTML = data.duration;
-            // seek slider bar
-            const a = data.position.split(':'); 
-            const a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
-            const b = data.duration.split(':'); 
-            const b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
-            document.querySelector("#seek-slider").value = 100 * a1/b1;
+            // Sync client-side timer with server position
+            syncPosition(data.position, data.duration, data.state || 'PLAYING');
         } catch (error) {
             handleApiError(error, 'Get progress');
         }
@@ -476,8 +609,6 @@ Credits:
             document.querySelector(".title").innerHTML = data.title;
             document.querySelector(".artist").innerHTML = data.artist;
             document.querySelector(".album").innerHTML = data.album;
-            document.querySelector("#current-time").innerHTML = data.position;
-            document.querySelector("#duration").innerHTML = data.duration;
 
             // pull title from XML metadata if not existing
             const parser = new DOMParser();
@@ -487,38 +618,13 @@ Credits:
                 document.querySelector(".title").innerHTML = xmltitle.childNodes[0].nodeValue;
             }
 
-            // seek slider bar
-            const a = data.position.split(':'); 
-            const a1 = (+a[0]) * 60 * 60 + (+a[1]) * 60 + (+a[2]); 
-            const b = data.duration.split(':'); 
-            const b1 = (+b[0]) * 60 * 60 + (+b[1]) * 60 + (+b[2]); 
-            document.querySelector("#seek-slider").value = 100 * a1/b1;
-
-            // album art
-            const albumArtElem = document.querySelector('#album_art');
-            if(data.album_art2) {
-                    if(albumArtElem.getAttribute("src")!=data.album_art2) {
-                        albumArtElem.setAttribute('src', data.album_art2);
-                        const styleElem = document.head.appendChild(document.createElement("style"));
-                        styleElem.innerHTML = "body::before {background: url(" + data.album_art2 + ");}";
-                    }
-                } 
-            else {
-                if(data.album_art) {
-                    if(albumArtElem.getAttribute("src")!=data.album_art) {
-                        albumArtElem.setAttribute('src', data.album_art);
-                        const styleElem = document.head.appendChild(document.createElement("style"));
-                        styleElem.innerHTML = "body::before {background: url(" + data.album_art + ");}";
-                    }
-                }
-                else {
-                    if(albumArtElem.getAttribute("src")!='/notitle.png') {
-                        albumArtElem.setAttribute('src', '/notitle.png');
-                        const styleElem = document.head.appendChild(document.createElement("style"));
-                        styleElem.innerHTML = "body::before {background: url(/notitle.png);}";
-                    }
-                }
+            // Sync client-side timer with server position
+            if (data.position && data.duration) {
+                syncPosition(data.position, data.duration, data.state || 'PLAYING');
             }
+            
+            // Update client-side play state
+            playbackState.isPlaying = (data.state === 'PLAYING' || data.state === 'TRANSITIONING');
         } catch (error) {
             handleApiError(error, 'Get current playing');
         } 
@@ -527,30 +633,9 @@ Credits:
     // Progress Bar Refresh (still using local polling for smooth updates)
     function refreshprogress() {
         showprogress();
-        setTimeout(refreshprogress, 500);
-    }
-
-    // Legacy polling functions - only used as fallback if SSE fails
-    function refresh1s() {
-        if (!sseConnected) {
-            showplaying();
-            queuedepth();
-        }
-        setTimeout(refresh1s, 1000);
-    }
-
-    function refresh5s() {
-        if (!sseConnected) {
-            showstates();
-        }
-        setTimeout(refresh5s, 5000);
-    }
-
-    function refresh10s() {
-        if (!sseConnected) {
-            updatevolume();
-        }
-        setTimeout(refresh10s, 10000);
+        // Reduce polling frequency when SSE is connected (10s vs 2s)
+        const delay = sseConnected ? 10000 : 2000;
+        setTimeout(refreshprogress, delay);
     }
 
     // Get States
@@ -624,6 +709,12 @@ Credits:
     try {
         const response = await fetch(getApiUrl('speakers'));
         const data = await response.json();
+        
+        // Fetch main volume from /state endpoint
+        const stateResponse = await fetch(getApiUrl('state'));
+        const stateData = await stateResponse.json();
+        const mainVolume = stateData.volume || 0;
+        
         let table = "<table style='margin-left: 10px;'>";
 
         // Main Volume row first
@@ -631,8 +722,8 @@ Credits:
         table += "<td>Main Volume</td>";
         table += "<td></td><td></td>";
         table += "<td><label for='volume-slider'></label></td>";
-        table += "<td><input type='range' id='volume-slider' class='vol-slider' min='0' max='50' value='0' step='1' oninput=\"updateVolumeDisplay(this.value)\" onchange=\"updateVolume(this.value)\"></td>";
-        table += "<td><span id='volume'>0</span></td>";
+        table += "<td><input type='range' id='volume-slider' class='vol-slider' min='0' max='50' value='" + mainVolume + "' step='1' oninput=\"updateVolumeDisplay(this.value)\" onchange=\"updateVolume(this.value)\"></td>";
+        table += "<td><span id='volume'>" + mainVolume + "</span></td>";
         table += "<td><button title='Volume up' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)+1; updateVolume(v);})()\">▲</button></td>";
         table += "<td><button title='Volume down' onclick=\"(function(){var v=parseInt(document.getElementById('volume-slider').value||0)-1; updateVolume(v);})()\">▼</button></td>";
         table += "</tr>";
@@ -943,10 +1034,10 @@ Credits:
             // Build modal content: title, artist, Add All button, song list
             // compute thumbnail URL
             const thumb = data.thumbfile ? getMediaUrl(data.thumbfile) : getApiUrl('notitle.png');
-            let html = '<div class="album-modal-header">';
+            let html = '<button class="album-modal-close" onclick="closeAlbumModal()">&times;</button>';
+            html += '<div class="album-modal-header">';
             html += '<img class="album-modal-thumb" src="' + thumb + '" alt="Album art">';
             html += '<div style="flex:1">';
-            html += '<button class="album-modal-close" onclick="closeAlbumModal()">&times;</button>';
             html += '<h3 class="atitle">' + (data.title || '') + '</h3>';
             html += '<div class="asubtitle">' + (data.artist || '') + '</div>';
             html += '</div>';
@@ -1148,7 +1239,7 @@ Credits:
             <div class="player-container">
                 <div class="player">
                     <div class="album-cover">
-                        <img id="album_art" src="notitle.png" alt="album cover">
+                        <img id="album_art" src="/notitle.png" alt="album cover">
                     </div>
                     <div class="song-info">
                         <p class="title">Song Title</p>
@@ -1349,13 +1440,11 @@ Credits:
     // Try to connect via SSE for real-time updates
     connectSSE();
     
-    // Start progress bar refresh (always using local polling for smooth UI)
-    refreshprogress();
+    // Start client-side playback timer for smooth position updates
+    startPlaybackTimer();
     
-    // Start fallback polling (will be conditional based on SSE status)
-    refresh1s();
-    refresh5s();
-    refresh10s();
+    // Start progress bar refresh (reduced frequency with client-side interpolation)
+    refreshprogress();
 
     
     </script>

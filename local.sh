@@ -31,7 +31,9 @@ export M3UPATH="/Volumes/Plex"
 # DROPPREFIX: Prefix to remove from M3U file paths
 # Used when M3U files contain absolute paths that need to be adjusted for local testing
 # Set to the part of the path to strip out so paths inside the container are correct
-export DROPPREFIX="/storj/plex"
+export DROPPREFIX="/media"
+
+export DEBUGMODE=True
 
 # ============================================================================
 # OPTIONAL CONFIGURATION

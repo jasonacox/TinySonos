@@ -54,9 +54,10 @@ DROPPREFIX = "/media"        # Optional - Omit media filename prefix
 
 # Environment config
 M3UPATH = os.getenv("M3UPATH", MEDIAPATH) 
-MEDIAPATH = os.getenv("MEDIAPATH", MEDIAPATH) 
-MEDIAHOST = os.getenv("MEDIAHOST", None) 
-DROPPREFIX = os.getenv("DROPPREFIX", DROPPREFIX) 
+MEDIAPATH = os.getenv("MEDIAPATH", MEDIAPATH)
+MEDIAHOST = os.getenv("MEDIAHOST", None)
+DROPPREFIX = os.getenv("DROPPREFIX", DROPPREFIX)
+DEBUGMODE = os.getenv("DEBUGMODE", str(DEBUGMODE)).lower() in ("true", "1", "yes")
 
 # Static Assets
 web_root = os.path.join(os.path.dirname(__file__), "web")
@@ -548,9 +549,23 @@ class apihandler(BaseHTTPRequestHandler):
             sonos.group.volume = sonos.group.volume - 1
         elif self.path== '/next':
             if len(musicqueue) > 0 :
-                # Have jukebox queue up next song
-                sonos.stop()
-                stop = False
+                # Immediately play next song from queue
+                # Pop next song and play it immediately (don't wait for jukebox thread)
+                playing = musicqueue.pop(0)
+                if repeat:
+                    musicqueue.append(playing)
+                sonos.play_uri(playing['path'])
+                # Immediately broadcast track change via SSE for instant UI update
+                sse_broadcast('track_changed', {
+                    'title': playing.get('title', ''),
+                    'artist': playing.get('artist', ''),
+                    'album': playing.get('album', ''),
+                    'position': '0:00:00',
+                    'duration': playing.get('duration', '0:00:00'),
+                    'album_art': playing.get('album_art', '')
+                })
+                sse_broadcast('queue_changed', {'queuedepth': len(musicqueue)})
+                log.info(f"Next: Playing {playing.get('title', 'Unknown')}")
             else:
                 # Empty playlist, just send next command
                 sonos.next()
@@ -861,18 +876,28 @@ def sse_monitor():
             # Check for track changes
             try:
                 track_info = current_sonos.get_current_track_info()
-                current_track = f"{track_info.get('title', '')}|{track_info.get('artist', '')}|{track_info.get('album', '')}"
+                
+                # Prefer playing dictionary (from media library) for metadata, fallback to Sonos API
+                title = playing.get('title', '') or track_info.get('title', '')
+                artist = playing.get('artist', '') or track_info.get('artist', '')
+                album = playing.get('album', '') or track_info.get('album', '')
+                
+                current_track = f"{title}|{artist}|{album}"
                 
                 if current_track != sse_state['last_track']:
                     sse_state['last_track'] = current_track
-                    # Broadcast track change event
+                    # Use server's album art if available (from media library), otherwise use Sonos
+                    album_art_url = playing.get('album_art', '') or track_info.get('album_art', '')
+                    
+                    log.info(f"SSE: Track changed - Title: {title}, Album Art: '{album_art_url}'")
+                    # Broadcast track change event with metadata from playing dictionary (media library)
                     sse_broadcast('track_changed', {
-                        'title': track_info.get('title', ''),
-                        'artist': track_info.get('artist', ''),
-                        'album': track_info.get('album', ''),
+                        'title': title,
+                        'artist': artist,
+                        'album': album,
                         'position': track_info.get('position', '0:00:00'),
                         'duration': track_info.get('duration', '0:00:00'),
-                        'album_art': track_info.get('album_art', '')
+                        'album_art': album_art_url
                     })
                     log.debug("SSE: Track changed")
             except Exception as e:
@@ -944,8 +969,8 @@ def sse_monitor():
                 })
                 log.debug(f"SSE: Queue depth changed to {current_queue_depth}")
             
-            # Sleep briefly before next check (500ms for responsive updates)
-            time.sleep(0.5)
+            # Sleep briefly before next check (200ms for responsive updates)
+            time.sleep(0.2)
             
         except Exception as e:
             log.warning(f"SSE Monitor: Unexpected error: {e}")
@@ -983,10 +1008,20 @@ def jukebox():
                         musicqueue.append(playing)
                     # Play it
                     sonos.play_uri(playing['path'])
+                    # Immediately broadcast track change via SSE
+                    sse_broadcast('track_changed', {
+                        'title': playing.get('title', ''),
+                        'artist': playing.get('artist', ''),
+                        'album': playing.get('album', ''),
+                        'position': '0:00:00',
+                        'duration': playing.get('duration', '0:00:00'),
+                        'album_art': playing.get('album_art', '')
+                    })
+                    sse_broadcast('queue_changed', {'queuedepth': len(musicqueue)})
                     log.debug("Play", playing['path'])
             except:
                 log.debug("Jukebox: ERROR sending sonos commands")
-        time.sleep(5)
+        time.sleep(0.5)
 
 def api(port):
     """

@@ -1,6 +1,22 @@
 # Release Notes
 
-## v0.0.26 (Current)
+## v0.0.27 (Current)
+- **UI/UX Enhancements**:
+  - Redesigned disconnect button with eject icon (⏏) replacing "do not enter" emoji
+  - Integrated Main Volume control into speaker table for consistent layout
+  - Added styled speaker panel with surface background, rounded corners, and shadow
+  - Aligned player and speaker panels with consistent top spacing
+  - Alphabetically sorted speaker names in speaker list
+  - Improved dark mode theme with better contrast and readability
+  - Added top border to "Songs in Queue" heading for visual separation
+  - Enhanced CSS with theme-aware variables for colors, surfaces, and shadows
+  - Improved null-safety in DOM updates to prevent JavaScript errors
+- **Code Quality**:
+  - Refactored speaker table rendering for better maintainability
+  - Added safety checks for DOM element updates to prevent null reference errors
+  - Improved CSS organization and consistency
+
+## v0.0.26
 - Added Server-Sent Events (SSE) for real-time updates without polling
   - Real-time track changes, playback state, volume, and speaker updates
   - Automatic reconnection with exponential backoff
