@@ -22,6 +22,10 @@ Credits:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="notitle.png">
     <link rel="stylesheet" type="text/css" href="style.css">
+    <!-- Modern font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <title>TinySonos API Server</title>
     <script>
     // Globals
@@ -383,7 +387,7 @@ Credits:
         try {
             const sonosResponse = await fetch(getApiUrl('sonos'));
             const sonosData = await sonosResponse.json();
-            const text = `Sonos: ${sonosData.household_id} ${sonosData.uid}`;
+            const text = `${sonosData.household_id} ${sonosData.uid}`;
             document.querySelector(".sonos").innerHTML = text;
         } catch (error) {
             handleApiError(error, 'Get sonos info');
@@ -603,12 +607,12 @@ Credits:
 
     // Clear bold items in menu
     function clearmenu() {
-        document.getElementById("playlists").style.fontWeight = "normal";
-        document.getElementById("recent").style.fontWeight = "normal";
-        document.getElementById("albums").style.fontWeight = "normal";
-        document.getElementById("artists").style.fontWeight = "normal";
-        document.getElementById("songs").style.fontWeight = "normal";
-        document.getElementById("search").style.fontWeight = "normal";
+        // remove active class from all menu items
+        const ids = ['playlists','recent','albums','artists','search'];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+        });
     }
     // Playlists 
     async function showplaylists() {
@@ -616,27 +620,44 @@ Credits:
             const response = await fetch(getApiUrl('listm3u'));
             const data = await response.json();
             // store entire array 
-            let fn = "";
-            let name = "";
             let output = "";
-            let total = 0;
-            let rownum = 1;
-            const playlists = data.sort(); //(c1, c2) => (c1 > c2) ? 1 : (c1 < c2) ? -1 : 0);
-            // 
-            for (let x in playlists) {
-                output = output + "<li>" + 
-                    "<a href=\"#\" onclick=\"javascript:myclick('playlist/" +
-                    encodeURI(playlists[x]) + "');\">" + 
-                    playlists[x] + "</a></li>\n";
-                    
-                rownum++;
-            }
-            
-            document.querySelector(".menutitle").innerHTML = "Playlists";
-            document.querySelector(".menunumber").innerHTML = rownum-1;
-            document.querySelector(".menucontent").innerHTML = output;
+            const playlists = data.sort();
+            // fetch each playlist to get counts in parallel
+            const counts = await Promise.all(playlists.map(async (p) => {
+                try {
+                    const r = await fetch(getApiUrl('showplaylist/' + encodeURIComponent(p)));
+                    const j = await r.json();
+                    return j.length || 0;
+                } catch (e) {
+                    return 0;
+                }
+            }));
+
+            // build a table: Name | Songs | Actions
+            output += '<table class="playlist-table">';
+            output += '<thead><tr><th>Name</th><th>Songs</th><th>Actions</th></tr></thead>';
+            output += '<tbody>';
+                        for (let i = 0; i < playlists.length; i++) {
+                                const name = playlists[i];
+                                const count = counts[i] || 0;
+                                output += '<tr>' +
+                                        '<td><a href="#" onclick="javascript:myclick(\'playlist/' + encodeURI(name) + '\'); return false;">' + name + '</a></td>' +
+                                        '<td style="text-align:center;">' + count + '</td>' +
+                                        '<td style="text-align:center;">' +
+                                            '<button class="add-queue" aria-label="Add to Queue" title="Add to Queue" onclick="javascript:myclick(\'playlist/' + encodeURI(name) + '\');">+</button>' +
+                                        '</td>' +
+                                        '</tr>';
+                        }
+            output += '</tbody></table>';
+
+            document.querySelector('.menutitle').innerHTML = 'Playlists';
+            document.querySelector('.menunumber').innerHTML = playlists.length;
+            const menuContent = document.querySelector('.menucontent');
+            menuContent.innerHTML = output;
+            // mark menucontent as table view so CSS can relax grid constraints
+            menuContent.classList.add('table-view');
             clearmenu();
-            document.getElementById("playlists").style.fontWeight = "bold";
+            const el_playlists = document.getElementById('playlists'); if (el_playlists) el_playlists.classList.add('active');
             
         } catch (error) {
             handleApiError(error, 'Get playlists');
@@ -794,28 +815,31 @@ Credits:
                 const thumb = data[x].thumbfile 
                     ? getMediaUrl(data[x].thumbfile)
                     : getApiUrl('notitle.png');
-                output = output + 
-                    "<div class='albumrow'>" +
-                        "<div class='albumthumb'>" +
-                            "<img style='vertical-align:middle;' height=45 width=45 style=\"albumthumb\" src=\"" + thumb + "\">" +
-                        "</div>" +
-                        "<div class='albumdetail'>" +
-                            "<div class='songline'>" + data[x].title + " - " + data[x].artist + "</div>" +
-                            "<div>" +
-                                "<button onclick=\"javascript:myclick('albumadd/" + encodeURI(data[x].key) +  "');\">Add All " + data[x].songs + " Songs</button> " + 
-                                "<button onclick=\"javascript:expandalbum('" + data[x].key + "');\">View Songs</button>" + 
-                            "</div> " +
-                            "<div class='songlist, songs" + data[x].key + "'>" + 
-                            "</div>" +
-                        "</div>" +
-                    "</div>\n";
+                output += "<div class=\"album-card album" + data[x].key + "\">" +
+                          "  <div class=\"album-thumb\">" +
+                          "    <a href=\"#\" onclick=\"javascript:expandalbum2('" + data[x].key + "',0);\">" +
+                          "      <img class=\"album-img\" src=\"" + thumb + "\" loading=\"lazy\">" +
+                          "    </a>" +
+                          "  </div>" +
+                          "  <div class=\"album-text\">" +
+                          "    <div class=\"atitle\">" + data[x].title + "</div>" +
+                          "    <div class=\"asubtitle\">" + data[x].artist + "</div>" +
+                          "    <div style=\"margin-top:8px;\">" +
+                          "      <button onclick=\"javascript:myclick('albumadd/" + encodeURI(data[x].key) + "');\">Add All " + data[x].songs + "</button> " +
+                          "      <button onclick=\"javascript:expandalbum('" + data[x].key + "');\">View Songs</button>" +
+                          "    </div>" +
+                          "  </div>" +
+                          "</div>";
                 rownum++;
             }
             document.querySelector(".menutitle").innerHTML = "Recently Added Albums";
             document.querySelector(".menunumber").innerHTML = rownum-1;
-            document.querySelector(".menucontent").innerHTML = output;
+            const menuContent = document.querySelector('.menucontent');
+            menuContent.innerHTML = output;
+            // remove table-view class (if previously set for playlists)
+            menuContent.classList.remove('table-view');
             clearmenu();
-            document.getElementById("recent").style.fontWeight = "bold";
+            const el_recent = document.getElementById('recent'); if (el_recent) el_recent.classList.add('active');
         } catch (error) {
             handleApiError(error, 'Get recent albums');
         }
@@ -845,66 +869,52 @@ Credits:
     }
 
     async function expandalbum2(key, row) {
-        const id = ".expand" + row;
-        const dataid = ".data" + row;
-        const albumid = ".album" + key;
+        // Open album details in a modal instead of manipulating the grid
         try {
             const response = await fetch(getApiUrl(`album/${key}`));
             const data = await response.json();
-            let songlist = "<span class=\"atitle\">" + data.title + "</span>" +
-                "<span class=\"asubtitle\">" + data.artist + "</span><br>" +
-                "<button onclick=\"javascript:myclick('albumadd/" + encodeURI(key) +  "');\">Add All</button><br>";
-            for (let x in data.tracks) {
-                const length = new Date(data.tracks[x].length * 1000).toISOString().substring(14, 19);
-                songlist = songlist +         
-                    "<li><a href=\"#\" onclick=\"javascript:myclick('addsong/" + encodeURI(data.tracks[x].key) + 
-                            "');\">" + data.tracks[x].song + " [" + length + "]</a></li>";
-            }    
+            console.log('expandalbum2 response for', key, data);
 
-            // clear old highlights if set
-            const ha = localStorage.getItem('highlight-albumid');
-            const hr = localStorage.getItem('highlight-rowid');
-            if (ha != albumid && ha != "") {
-                // unhighlight old album
-                document.querySelector(ha).style.backgroundColor = "";
-                document.querySelector(ha).style.height = "";
-                document.querySelector(ha).style.marginBottom = "";
-                document.querySelector(ha).style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-            }
-            if (hr != id && hr != "") {
-                // unhighlight old row
-                document.querySelector(hr).style.backgroundColor = "";
-                document.querySelector(hr).innerHTML = "";
-            }
-
-            //console.log(document.querySelector(albumid).style.borderColor);
-            // change content or toggle off if same
-            if (ha == albumid) {
-                document.querySelector(id).innerHTML = "";
-                document.querySelector(id).style.backgroundColor = "";
-                document.querySelector(albumid).style.backgroundColor = "";
-                document.querySelector(albumid).style.height = "";
-                document.querySelector(albumid).style.marginBottom = "";
-                document.querySelector(albumid).style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-                document.querySelector(dataid).innerHTML = "";
-                localStorage.setItem('highlight-albumid', "");
-                localStorage.setItem('highlight-rowid', "");
-            }
-            else {
-                document.querySelector(id).innerHTML = songlist;
-                document.querySelector(albumid).style.backgroundColor = "#FF47";
-                document.querySelector(albumid).style.height = "190px";
-                document.querySelector(albumid).style.marginBottom = "0px";
-                document.querySelector(albumid).style.boxShadow = "0 0 0";
-                document.querySelector(id).style.backgroundColor = "#FF47";
-                var z = document.querySelector(dataid).innerHTML;
-                if (z != "") {
-                    document.querySelector(z).style.backgroundColor = "";
+            // Build modal content: title, artist, Add All button, song list
+            // compute thumbnail URL
+            const thumb = data.thumbfile ? getMediaUrl(data.thumbfile) : getApiUrl('notitle.png');
+            let html = '<div class="album-modal-header">';
+            html += '<img class="album-modal-thumb" src="' + thumb + '" alt="Album art">';
+            html += '<div style="flex:1">';
+            html += '<button class="album-modal-close" onclick="closeAlbumModal()">&times;</button>';
+            html += '<h3 class="atitle">' + (data.title || '') + '</h3>';
+            html += '<div class="asubtitle">' + (data.artist || '') + '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="album-modal-actions"><button onclick="javascript:myclick(\'albumadd/' + encodeURI(key) + '\'); closeAlbumModal();">Add All</button></div>';
+            // Normalize tracks: server may return an object with numeric keys instead of an array
+            const tracksArr = [];
+            if (Array.isArray(data.tracks)) {
+                tracksArr.push(...data.tracks);
+            } else if (data.tracks && typeof data.tracks === 'object') {
+                // collect numeric keys in order
+                const keys = Object.keys(data.tracks).filter(k => k !== 'length').sort((a,b) => Number(a) - Number(b));
+                for (const k of keys) {
+                    tracksArr.push(data.tracks[k]);
                 }
-                document.querySelector(dataid).innerHTML = albumid;
-                localStorage.setItem('highlight-albumid', albumid);
-                localStorage.setItem('highlight-rowid', id);
             }
+
+            if (tracksArr.length === 0) {
+                html += '<p style="color:var(--muted);">No tracks found for this album.</p>';
+            }
+            html += '<ol class="album-modal-list">';
+            for (let i = 0; i < tracksArr.length; i++) {
+                const t = tracksArr[i];
+                const length = new Date(t.length * 1000).toISOString().substring(14, 19);
+                const num = i + 1;
+                html += '<li><span class="track-num">' + num + '. </span><a href="#" onclick="javascript:myclick(\'addsong/' + encodeURI(t.key) + '\'); closeAlbumModal(); return false;">' + (t.song || '') + ' [' + length + ']</a></li>';
+            }
+            html += '</ol>';
+
+            const modal = document.getElementById('album-modal');
+            const content = document.getElementById('album-modal-content');
+            if (content) content.innerHTML = html;
+            if (modal) modal.style.display = 'flex';
         } catch (error) {
             handleApiError(error, `Get album ${key}`);
         }
@@ -918,94 +928,40 @@ Credits:
             const data = await response.json();
             // array of albums
             let output = "";
-            let col = 0;
-            let row = 0;
-            // show all album tiles
+            // show all album tiles (flat grid of .album-card elements)
             for (let x in data) {
-                const thumb = data[x].thumbfile 
-                    ? getMediaUrl(data[x].thumbfile)
-                    : getApiUrl('notitle.png');
-                col += 1;
-                if (col == 1) {
-                    output = output + "<div class=\"arow rowid" + row.toString() + "\">\n";
-                }
-                output = output + 
-                    "<div class=\"album-card album" + data[x].key+  "\">" +
-                        "<div class=\"album-thumb\">" +
-                            "<a href=\"#rowid" + row.toString() + "\" onclick=\"javascript:expandalbum2(" +
-                                data[x].key + "," + row.toString() + ");\">" +
-                                "<img class=\"album-img\" src=\"" + thumb + "\">" +
-                            "</a>\n" +
-                        "</div>" +
-                        "<div class=\"album-text\">" +
-                            "<div class=\"atitle\">" +
-                                "<a href=\"#rowid" + row.toString() + "\" onclick=\"javascjavascript:expandalbum2(" +
-                                data[x].key +  "," + row.toString() + ");\">" + data[x].title + 
-                                "</a>\n" +
-                            "</div>" +
-                            "<div class=\"asubtitle\">" +
-                                data[x].artist + "<br>" +
-                                "<a href=\"#rowid" + row.toString() + "\" onclick=\"javascript:expandalbum2(" + data[x].key + "," + 
-                                    row.toString() + ");\">"  + "[" + data[x].songs + " Songs]" + 
-                                "</a>\n" +
-                            "</div>" +
-                        "</div>" +
-                    "</div>\n";
-
-                if (col >= 4) {
-                    output = output + "</div>\n" +
-                        "<div class=\"album-expand expand" + row.toString() + "\">" + 
-                        "</div>" +
-                        "<div hidden class =\"data" + row.toString() + "\"></div>";
-                    col = 0;
-                    row += 1;
-                }
+                const thumb = data[x].thumbfile ? getMediaUrl(data[x].thumbfile) : getApiUrl('notitle.png');
+                output += "<div class=\"album-card album" + data[x].key + "\">" +
+                          "  <div class=\"album-thumb\">" +
+                          "    <a href=\"#\" onclick=\"javascript:expandalbum2('" + data[x].key + "',0);\">" +
+                          "      <img class=\"album-img\" src=\"" + thumb + "\" loading=\"lazy\">" +
+                          "    </a>" +
+                          "  </div>" +
+                          "  <div class=\"album-text\">" +
+                          "    <div class=\"atitle\">" + data[x].title + "</div>" +
+                          "    <div class=\"asubtitle\">" + data[x].artist + "</div>" +
+                          "  </div>" +
+                          "</div>";
             }
-            output = output + "</div>\n" +
-                "<div class=\"album-expand expand" + row.toString() + "\">" + 
-                "</div>" +
-                "<div hidden class =\"data" + row.toString() + "\"></div>";
             
             
-            document.querySelector(".menunumber").innerHTML = row-1;
-            document.querySelector(".menucontent").innerHTML = output;
+            // use the actual number of albums returned
+            document.querySelector(".menunumber").innerHTML = (Array.isArray(data) ? data.length : 0);
+            const menuContent = document.querySelector('.menucontent');
+            menuContent.innerHTML = output;
+            menuContent.classList.remove('table-view');
             clearmenu();
             if (scope == "recent") {
-                document.getElementById("recent").style.fontWeight = "bold";
+                const el_recent2 = document.getElementById('recent'); if (el_recent2) el_recent2.classList.add('active');
                 document.querySelector(".menutitle").innerHTML = "Recent Albums";
             }
             else {
-                document.getElementById("albums").style.fontWeight = "bold";
+                const el_albums = document.getElementById('albums'); if (el_albums) el_albums.classList.add('active');
                 document.querySelector(".menutitle").innerHTML = "All Albums";
             }
 
         } catch (error) {
             handleApiError(error, `Get albums ${scope}`);
-        }
-    }
-
-    // Show Songs 
-    async function showsongs() {
-        let rownum = 1;
-        try {
-            const response = await fetch(getApiUrl('albums/recent'));
-            const data = await response.json();
-            // array of albums
-            let output = "";
-            for (let x in data) {
-                output = output + "<li>" + 
-                    "<a href=\"#\" onclick=\"javascript:myclick('albumadd/" +
-                    encodeURI(data[x].key) + "');\">" + 
-                    data[x].title + "</a></li>\n";
-                rownum++;
-            }
-            document.querySelector(".menutitle").innerHTML = "Songs";
-            document.querySelector(".menunumber").innerHTML = rownum-1;
-            document.querySelector(".menucontent").innerHTML = output;
-            clearmenu();
-            document.getElementById("songs").style.fontWeight = "bold";
-        } catch (error) {
-            handleApiError(error, 'Get songs');
         }
     }
 
@@ -1016,7 +972,7 @@ Credits:
         document.querySelector(".menunumber").innerHTML = "TBD"
         document.querySelector(".menucontent").innerHTML = "";
         clearmenu();
-        document.getElementById("search").style.fontWeight = "bold";
+        const el_search = document.getElementById('search'); if (el_search) el_search.classList.add('active');
     }
 
     // Search 
@@ -1026,7 +982,7 @@ Credits:
         document.querySelector(".menunumber").innerHTML = "TBD"
         document.querySelector(".menucontent").innerHTML = "";
         clearmenu();
-        document.getElementById("artists").style.fontWeight = "bold";
+        const el_artists = document.getElementById('artists'); if (el_artists) el_artists.classList.add('active');
     }
 
     // Volume Change Handlers
@@ -1094,9 +1050,34 @@ Credits:
         }
     }
     </script>
+
+    <script>
+    // Display current screen size in footer for debugging
+    function updateScreenSize() {
+        const el = document.getElementById('screen-size');
+        if (!el) return;
+        el.textContent = window.innerWidth + '×' + window.innerHeight + (window.devicePixelRatio ? ' @' + window.devicePixelRatio + 'x' : '');
+    }
+    window.addEventListener('resize', updateScreenSize);
+    window.addEventListener('orientationchange', updateScreenSize);
+    document.addEventListener('DOMContentLoaded', updateScreenSize);
+    // update immediately in case scripts run after load
+    try { updateScreenSize(); } catch(e) {}
+    </script>
 </head>
 
 <body>
+    <header class="site-header">
+        <div class="sonostitle">TinySonos Server</div>
+        <div class="header-controls">
+            <button id="theme-toggle" class="ctrl" title="Toggle theme" aria-label="Toggle theme">
+                <!-- Inline SVG icon (crescent moon) sized via CSS; uses currentColor for easy theming -->
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                </svg>
+            </button>
+        </div>
+    </header>
     <div class="row">
         <div class="playercolumn">
             <div class="player-container">
@@ -1183,10 +1164,9 @@ Credits:
         </div>
         
         <div class="datacolumn">
-            <div class="sonostitle">Sonos</div>
             <div class="system">
                 <div id="volume-container">
-                    <label for="volume-slider">Speakers - Main Volume <a href="#" class="volume-mute-link" onclick="javascript:myclick('volume/mute');" title="Mute">🔇</a></label>
+                    <label for="volume-slider">Main Volume <a href="#" class="volume-mute-link" onclick="javascript:myclick('volume/mute');" title="Mute">🔇</a></label>
                     <input type="range" id="volume-slider" class="vol-slider" min="0" max="50" value="0" step="1" oninput="updateVolumeDisplay(this.value)" onchange="updateVolume(this.value)">
                     <span id="volume">0</span>
                 </div>
@@ -1204,6 +1184,7 @@ Credits:
                     <button class="ctrl" onclick="javascript:myclick('next');" title="Next">⏭</button>
                     <button id="repeat" class="toggle" onclick="javascript:myclick('toggle/repeat');" aria-pressed="false" title="Repeat">Repeat</button>
                     <button id="shuffle" class="toggle" onclick="javascript:myclick('toggle/shuffle');" aria-pressed="false" title="Shuffle">Shuffle</button>
+                    <!-- theme toggle removed -->
                     <button class="ctrl danger" onclick="javascript:myclick('disconnect');" title="Disconnect">⛔</button>
                 </div>
             </div>
@@ -1216,7 +1197,6 @@ Credits:
                         <p id="recent"><a href="#" onclick="javascript:showalbums('recent');">Recent</a></p>
                         <p id="albums"><a href="#" onclick="javascript:showalbums('all');">Albums</a></p>
                         <p id="artists"><a href="#" onclick="javascript:showartists();">Artists</a></p>
-                        <p id="songs"><a href="#" onclick="javascript:showsongs();">Songs</a></p>
                         <p id="search"><a href="#" onclick="javascript:showsearch();">Search</a></p>
                     </div>
                     <div class="menu-right">
@@ -1225,10 +1205,16 @@ Credits:
                     </div>
                 </div>
             </div>
-            <p class="sonos">Sonos: Unknown</p>
+            <!-- Sonos info moved to footer for compact display -->
         </div>
         
     </div>
+    <footer class="site-footer">
+        <span id="screen-size">-</span>
+        <span style="margin:0 8px;color:var(--muted);">·</span>
+        <span class="sonos">Sonos: Unknown</span>
+    </footer>
+
     <div class="alert" hidden="true">
         <span class="closebtn" onclick="this.parentElement.style.display='none';">&times;</span>
         <b class="alerttext">This is an alert</b>
@@ -1256,6 +1242,13 @@ Credits:
         </div>
     </div>
 
+    <!-- Album Details Modal -->
+    <div id="album-modal" class="offline-modal" style="display: none;">
+        <div id="album-modal-content" class="offline-content" role="dialog" aria-modal="true">
+            <!-- Content populated by JS -->
+        </div>
+    </div>
+
     <div hidden="true" class="highlight-albumid">
     </div>
     <div hidden="true" class="highlight-rowid">
@@ -1266,6 +1259,28 @@ Credits:
     // Setup local variables
     localStorage.setItem('highlight-albumid', "");
     localStorage.setItem('highlight-rowid', "");
+    // Theme init: apply saved theme (light or dark) and wire header toggle
+    (function(){
+        try {
+            const saved = localStorage.getItem('tinysonos_theme') || 'light';
+            if (saved === 'dark') {
+                document.documentElement.setAttribute('data-theme','dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        } catch(e) {
+            console.debug('theme init failed', e);
+        }
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const next = (current === 'dark') ? 'light' : 'dark';
+                if (next === 'dark') document.documentElement.setAttribute('data-theme','dark'); else document.documentElement.removeAttribute('data-theme');
+                try { localStorage.setItem('tinysonos_theme', next); } catch (e) {}
+            });
+        }
+    })();
                 
     // Display
     showversion();
@@ -1285,6 +1300,24 @@ Credits:
     refresh10s();
 
     
+    </script>
+
+    <script>
+    // Helper to close album modal
+    function closeAlbumModal() {
+        const modal = document.getElementById('album-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    // Close modal when clicking the backdrop (only when target is the modal itself)
+    (function(){
+        const modal = document.getElementById('album-modal');
+        const content = document.getElementById('album-modal-content');
+        if (!modal || !content) return;
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) closeAlbumModal();
+        });
+    })();
     </script>
 
 </body>

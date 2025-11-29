@@ -9,35 +9,108 @@ Author: Jason A. Cox
 Date: November 23, 2022
 For more information see https://github.com/jasonacox/tinysonos
 */
-html, body, form, fieldset, table, tr, td, img {
-    margin: 10;
-    padding: 5;
-    font: 100%/150% calibri,helvetica,sans-serif;
+:root{
+    --bg: #f6f7f8;
+    --surface: #ffffff;
+    --muted: #6b6f72;
+    --accent: #cc7e85;
+    --accent-strong: #b85f63;
+    --card-shadow: 0 10px 30px rgba(16,24,32,0.06);
+    --side-width: 300px; /* width used for player and queue side column */
+    --radius: 12px;
+    --gap: 12px;
+    --font-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 }
-body::before {
-    content: "";
-    background-color: #ffffff; 
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    min-height: 100%;
-    filter: blur(75px);
-    opacity: 0.5;
-    z-index: -1;
+
+/* Dark theme overrides */
+:root[data-theme="dark"], [data-theme="dark"] {
+    --bg: #0f1114;
+    --surface: #0b0c0e;
+    --muted: #9aa0a6;
+    --accent: #cc7e85;
+    --card-shadow: 0 8px 26px rgba(0,0,0,0.6);
+}
+
+html, body, form, fieldset, table, tr, td, img {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-sans);
+    color: #222;
+}
+body {
+    background: var(--bg);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    /* add horizontal padding so text doesn't touch screen edges */
+    padding: 0 12px;
 }
 div.sonostitle {
     margin-bottom: 10px;
-    font-size: 1.25em;
-    font-weight: 700;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--muted);
 }
+/* Site header that replaces the inline title panel. Uses the same .sonostitle element for JS compatibility. */
+.site-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Match the page background so header blends with body */
+    background: var(--bg);
+    box-shadow: var(--card-shadow);
+    padding: 6px 12px;
+    margin-bottom: 12px; /* space between header and main content */
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+.site-header .header-controls {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%); /* vertically center within header */
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.site-header .header-controls .ctrl {
+    /* compact square button to fit neatly in the header */
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px; /* smaller emoji/icon */
+    line-height: 1;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+/* Slight hover affordance without strong contrast */
+.site-header .header-controls .ctrl:hover {
+    background: rgba(0,0,0,0.04);
+}
+
+/* SVG sizing and color inside header control */
+.site-header .header-controls .ctrl svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    color: var(--muted);
+}
+.site-header .sonostitle { margin: 0; font-size: 1rem; font-weight: 600; color: #111; text-align:center; line-height:1; }
+
+.site-footer { text-align: center; padding: 8px 10px; color: var(--muted); font-size: 0.85rem; margin-top: 12px; }
+.site-footer .sonos { font-size: 0.85rem; color: var(--muted); margin-left: 6px; }
+.site-footer #screen-size { font-size: 0.85rem; color: var(--muted); }
 p.headings {
-    font: 120% calibri,helvetica,sans-serif;
-    font-size: 1.25em;
+    font-size: 0.95rem;
     font-weight: 700;
+    color: #222;
 }
 p.playlisttitle {
     font: 120% calibri,helvetica,sans-serif;
@@ -47,9 +120,7 @@ p.playlisttitle {
 p.sonos {
     font: 50% calibri,helvetica,sans-serif;
 }
-body {
-    font-size: 0.875em;
-}
+body { font-size: 14px; }
 /* The alert message box */
 .alert {
     padding: 20px;
@@ -83,123 +154,126 @@ body {
 /* Rows and Columns */
 .row {
     display: flex;
+    gap: 24px; /* horizontal space between player and data columns */
+    align-items: flex-start;
 }
 
 .datacolumn {
-    flex: 50%;
+    flex: 1 1 auto;
+    min-width: 320px; /* allow right column to shrink but not disappear under player */
 }
 .playercolumn {
-    flex: 30%;
+    flex: 0 0 300px; /* fixed column width so player keeps space */
 }
 .menu-row {
     display: block;
-    background-color: #FEFFFE;
+    background-color: var(--surface);
     overflow: hidden;
-    border:1px solid lightgray;
     border-radius: 10px;
-    padding: 3px;
-    padding-left: 7px;
+    padding: 8px;
+    padding-left: 12px;
+    box-shadow: var(--card-shadow);
 }
 .menu-left {
-    float: left;
+    /* Convert vertical menu into a compact horizontal tab bar */
+    float: none;
     position: relative;
-    display: block;
-
-    padding: 3px;
-    padding-left: 4px;
-    padding-right: 7px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 0;
 }
 .menu-right {
     flex: 75%;
     display: block;
-    background-color: #FEFFFE;
+    background-color: transparent;
     overflow: hidden;
-    border:1px solid lightgray;
-    border-radius: 10px;
-    padding: 3px;
-    padding-left: 7px;
+    padding: 0 12px 12px 12px;
+}
+
+/* Tabs styling for the small menu items */
+.menu-left p {
+    margin: 0;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--muted);
+}
+.menu-left p a { color: inherit; text-decoration: none; display: block; }
+.menu-left p.active {
+    background: rgba(204,126,133,0.12);
+    color: var(--accent-strong);
+    font-weight: 600;
 }
 
 .system {
     display: block;
-    background-color: #FEFFFE;
+    background-color: var(--surface);
     overflow: hidden;
-    border:1px solid lightgray;
     border-radius: 10px;
-    padding: 3px;
-    padding-left: 7px;
+    padding: 12px;
+    padding-left: 12px;
+    box-shadow: var(--card-shadow);
 }
 
 .playlists {
     display: block;
-    background-color: #FEFFFE;
+    background-color: transparent;
     overflow: hidden;
-    border:1px solid lightgray;
-    border-radius: 10px;
-    padding: 3px;
-    padding-left: 7px;
+    padding: 4px 0;
 }
 
 .queue-container {
-    width: 320px;
+    width: var(--side-width);
     position: relative;
     margin: 0 auto;
-    /* top: 50%;
-    transform: translateY(-50%);*/
 }
 
 .queue {
     display: block;
-    background-color: #FEFFFE;
+    background-color: var(--surface);
     overflow: hidden;
-    border:1px solid lightgray;
     border-radius: 10px;
-    padding: 3px;
-    padding-left: 7px;
-    font-size: 0.5em;
-    line-height: 2.0em;
+    padding: 10px;
+    font-size: 0.9em;
+    line-height: 1.6em;
+    box-shadow: var(--card-shadow);
 }
 
-.player-container {
-    width: 320px;
+player-container {
+    width: var(--side-width);
     position: relative;
     margin: 0 auto;
-    /* top: 50%;
-    transform: translateY(-50%);*/
 }
 
 .player {
     display: block;
-    padding: 1.875rem 0;
-    /* 30px */
-    background-color: #FEFFFE;
+    padding: 1.5rem 0.5rem;
+    background-color: var(--surface);
     height: auto;
-    /* 640px */
-    width: 20rem;
-    /* 360px */
-    /* 20px */
+    /* Slightly narrower than container so it's visually inset */
+    width: calc(100% - 16px);
+    margin: 0 auto;
     overflow: hidden;
-    border:1px solid #4e4e4e;
-    border-radius: 10px;    
+    border-radius: var(--radius);
+    box-shadow: var(--card-shadow);
 }
 
 .album-cover {
-    margin: 1.25rem auto;
-    /* 20px */
-    width: 13rem;
-    /* ~208px */
-    height: 13rem;
-    /* ~208px */
-    border-radius: 5%;
-    box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px;
+    margin: 1rem auto;
+    width: 12.5rem;
+    height: 12.5rem;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     user-select: none;
 }
 
 .album-cover img {
-    width: 13rem;
-    /* ~208px */
-    height: 13rem;
-    /* ~208px */
+    width: 12.5rem;
+    /* matches .album-cover */
+    height: 12.5rem;
+    /* matches .album-cover */
     border-radius: 5%;
 }
 
@@ -210,26 +284,20 @@ body {
 
 .title {
     max-width: 16rem;
-    /* 300px */
-    color: #242423;
+    color: #111;
     text-align: center;
-    font-size: 1.25em;
-    font-weight: 700;
-    margin: 2.25rem auto 1.75rem auto;
-    margin-bottom: 0;
-    margin-top: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 1rem auto 0.5rem auto;
 }
 
 .album {
     max-width: 16rem;
-    /* 300px */
-    color: #808782;
+    color: var(--muted);
     text-align: center;
-    font-size: 1.1em;
-    font-weight: 700;
-    margin: 2.25rem auto 1.75rem auto;
-    margin-bottom: 0;
-    margin-top: 0;
+    font-size: 0.98rem;
+    font-weight: 600;
+    margin: 0.25rem auto 0;
 }
 
 .artist {
@@ -265,6 +333,7 @@ body {
 
 input[type="range"] {
     position: relative;
+    appearance: none;
     -webkit-appearance: none;
     outline: none;
     width: 60%;
@@ -295,6 +364,7 @@ input[type="range"]::before {
 
 input[type="range"]::-webkit-slider-thumb {
     position: relative;
+    appearance: none;
     -webkit-appearance: none;
     box-sizing: content-box;
     margin: -6.5px 0 0 0;
@@ -454,17 +524,26 @@ input[type="range"]:active::-ms-thumb {
     flex-direction: row;
 }
 
-.album-card {
-    flex: 0 0 auto;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    background: #fff;
-    height: 100%;
-    position: relative;
-    text-decoration: none;
-    vertical-align: top;
-    width: 115px;
-    margin: 5px;
+/* album-card base styles defined below */
+
+/* Grid layout for the menu content (albums/cards) */
+.menucontent {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 120px); /* slightly wider card width to accomodate full art */
+    grid-auto-rows: 180px; /* taller rows so art can scale without clipping */
+    gap: 10px;
+    align-items: start;
+    justify-content: start;
+}
+
+/* When .menucontent is displaying tabular/list content (playlists, songs),
+   switch out of the grid mode so tables can size naturally. JS will add
+   or remove the .table-view class as appropriate. */
+.menucontent.table-view {
+    display: block;
+}
+.menucontent.table-view .playlist-table {
+    width: 100%;
 }
 
 .album-expand {
@@ -481,45 +560,122 @@ input[type="range"]:active::-ms-thumb {
     overflow: hidden;
     padding: 7px 10px 0;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    flex: 1 1 auto;
 }
 
-.album-thumb {
-    height: 115px;
-    background: grey;
+.album-card {
+    width: 120px;
+    height: 100%;
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
-
-.album-img {
-    height: 115px;
-    width: 115px;
-}
-
 .atitle {
-    color: #212121;
-    display: block;
-    font-size: 16px;
-    line-height: 18px;
-    max-height: 36px;
-    min-height: 18px;
+    font-size: 11px;
+    line-height: 1.0rem;
+    max-height: 2.0rem; /* approx 2 lines */
     overflow: hidden;
     text-decoration: none;
     position: relative;
-    white-space: nowrap;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
 }
 
 .asubtitle {
     color: #616161;
-    display: inline-block;
-    font-size: 13px;
-    line-height: 16px;
-    margin: 1px 0;
-    max-width: 132px;
+    display: block;
+    font-size: 10px;
+    line-height: 1rem;
+    margin: 2px 0 0 0;
     overflow: hidden;
-    white-space: nowrap;
+    display: -webkit-box;
+    line-clamp: 1;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+    word-break: break-word;
+}
+
+/* Thumbnail sizing inside album cards (cropped) */
+.album-card .album-thumb {
+    width: 100%;
+    height: 120px; /* larger thumbnail so contained images can scale */
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+.album-card .album-img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain; /* show the full image without cropping */
+    display: block;
+    padding: 4px;
 }
 
 .vol-slider {
-    width: 150px !important;
+    width: 100px !important;
 }
+
+/* Playlist table styles */
+.playlist-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    box-shadow: var(--card-shadow);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.playlist-table thead th {
+    text-align: left;
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.03);
+    font-weight: 600;
+    font-size: 0.95em;
+}
+.playlist-table tbody td {
+    padding: 6px 12px; /* compact rows */
+    border-top: 1px solid rgba(0,0,0,0.04);
+    vertical-align: middle;
+    font-size: 0.95em;
+    line-height: 1.2;
+}
+.playlist-table button {
+    padding: 0; /* plain text button */
+    border-radius: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: none;
+}
+.playlist-table button:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+/* Compact Add-to-Queue button style (icon-only) */
+.playlist-table .add-queue {
+    font-size: 1.1em;
+    padding: 0 6px;
+    line-height: 1;
+    min-width: 20px;
+    display: inline-block;
+}
+.playlist-table a { color: inherit; text-decoration: none; }
 
 .slider-container {
     text-align: left;
@@ -529,8 +685,9 @@ input[type="range"]:active::-ms-thumb {
 .toggle-switch {
     position: relative;
     display: inline-block;
-    width: 40px;
-    height: 20px;
+    /* slightly smaller toggles */
+    width: 32px;
+    height: 16px;
 }
 
 .toggle-switch input {
@@ -548,16 +705,17 @@ input[type="range"]:active::-ms-thumb {
     bottom: 0;
     background-color: #ccc;
     transition: 0.3s;
-    border-radius: 20px;
+    border-radius: 16px;
 }
 
 .toggle-slider:before {
     position: absolute;
     content: "";
-    height: 14px;
-    width: 14px;
-    left: 3px;
-    bottom: 3px;
+    /* smaller knob */
+    height: 12px;
+    width: 12px;
+    left: 2px;
+    bottom: 2px;
     background-color: white;
     transition: 0.3s;
     border-radius: 50%;
@@ -568,7 +726,8 @@ input:checked + .toggle-slider {
 }
 
 input:checked + .toggle-slider:before {
-    transform: translateX(20px);
+    /* translate the knob appropriately for new width */
+    transform: translateX(16px);
 }
 
 .toggle-slider:hover {
@@ -607,6 +766,51 @@ input:checked + .toggle-slider:before {
     text-align: center;
     max-width: 400px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Album modal overrides (re-using offline-modal layout) */
+#album-modal {
+    z-index: 20000;
+}
+#album-modal .offline-content {
+    max-width: 520px;
+    text-align: left;
+    color: var(--muted);
+    background: var(--surface);
+    color: #111;
+    padding: 18px 20px;
+}
+.album-modal-header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.album-modal-header .atitle { margin:0; font-size:1.05rem; font-weight:700; }
+.album-modal-header .asubtitle { font-size:0.95rem; color:var(--muted); }
+.album-modal-close { background:transparent; border:0; font-size:1.5rem; cursor:pointer; }
+.album-modal-thumb {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-right: 12px;
+    flex: 0 0 auto;
+}
+.album-modal-actions { margin: 8px 0 12px 0; }
+.album-modal-actions button { padding:8px 12px; border-radius:6px; background:var(--accent); color:#fff; border:0; cursor:pointer; }
+.album-modal-list { max-height: 380px; overflow:auto; padding-left: 18px; margin:0; }
+.album-modal-list li { margin: 6px 0; }
+.album-modal-list a { color: inherit; text-decoration: none; }
+.album-modal-list a:hover { text-decoration: underline; color: var(--accent); }
+
+/* Remove default ol markers and give track numbers a fixed width */
+.album-modal-list {
+    list-style: none; /* hide browser numbering */
+    padding-left: 0;  /* we'll show numbers manually */
+}
+.album-modal-list .track-num {
+    display: inline-block;
+    width: 30px; /* enough for two-digit numbers */
+    text-align: right;
+    margin-right: 8px;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;
 }
 
 .offline-icon {
@@ -653,7 +857,7 @@ input:checked + .toggle-slider:before {
 /* Controls toolbar styles */
 .controls-toolbar {
     display: inline-flex;
-    gap: 8px;
+    gap: 6px;
     align-items: center;
     margin-left: 8px;
 }
@@ -661,26 +865,29 @@ input:checked + .toggle-slider:before {
 .controls-toolbar .ctrl,
 .controls-toolbar .toggle {
     background: transparent;
-    border: 1px solid #d0d0d0;
+    border: 0;
     padding: 6px 8px;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 0.95em;
+    font-size: 0.92em;
+    color: var(--muted);
+    transition: transform .12s ease, background-color .12s ease, color .12s ease;
 }
 
 .controls-toolbar .ctrl:hover,
 .controls-toolbar .toggle:hover {
-    background: #f5f5f5;
+    transform: translateY(-2px);
+    color: #000;
 }
 
 .controls-toolbar .primary {
-    background: #cc7e85;
+    background: var(--accent);
     color: #fff;
-    border-color: #cc7e85;
+    border-color: var(--accent);
+    box-shadow: 0 6px 18px rgba(204,126,133,0.18);
 }
 
 .controls-toolbar .danger {
-    border-color: #e57373;
     color: #a33;
 }
 
@@ -692,10 +899,8 @@ input:checked + .toggle-slider:before {
 
 /* Active state for toggles (use same accent as main play icon) */
 .controls-toolbar .toggle.active {
-    background: #cc7e85; /* play button / icon accent color */
+    background: var(--accent);
     color: #fff;
-    border-color: #cc7e85;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.06) inset;
 }
 
 /* Make toggle focus visible and accessible */
@@ -720,8 +925,35 @@ input:checked + .toggle-slider:before {
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
 
+/* Smaller text for speaker list area to keep names compact */
+.speakers {
+    font-size: 0.82rem; /* slightly smaller for compact speaker names */
+    color: var(--muted);
+}
+.speakers table {
+    font-size: 0.82rem;
+}
+.speakers a {
+    font-size: 0.82rem;
+    color: inherit;
+}
+
+/* Ensure speaker table cells vertically center their contents (toggles, buttons, sliders) */
+.speakers table td {
+    vertical-align: middle;
+}
+
+/* Make the toggle switch use inline-flex so it can center its internal content */
+.speakers .toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    height: 16px; /* match .toggle-switch height for alignment */
+}
+
 .control-panel .controls-toolbar {
-    gap: 10px;
+    gap: 8px;
 }
 
 /* Make buttons slightly smaller in the thin panel */
@@ -752,7 +984,8 @@ input:checked + .toggle-slider:before {
 }
 
 /* Responsive adjustments for small/portrait screens */
-@media (max-width: 768px) {
+/* Activate responsive layout at 700px and below */
+@media (max-width: 700px) {
     /* Stack main columns */
     .row {
         flex-direction: column;
@@ -836,15 +1069,16 @@ input:checked + .toggle-slider:before {
         flex-wrap: wrap;
     }
 
-    .album-card {
-        width: 45%;
-    }
+    /* Responsive overrides removed - grid controls card sizing now */
 
     /* Make modals fit smaller screens */
     .offline-content {
         padding: 20px;
         max-width: 92%;
     }
+
+    /* Slightly reduce header gap on small screens */
+    .site-header { margin-bottom: 8px; }
 
     /* (compact speaker controls removed) */
 }
@@ -864,7 +1098,8 @@ input:checked + .toggle-slider:before {
 
     .bottom-controls svg { width: 36px; height: 36px; }
 
-    .album-card { width: 48%; }
+    .menucontent { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); grid-auto-rows: auto; }
+    .album-card { width: 100%; height: auto; }
 
     .menu-left p { margin: 4px 0; }
 
