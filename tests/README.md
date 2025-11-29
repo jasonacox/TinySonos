@@ -45,7 +45,7 @@ Current tests cover:
 - State management
 - Queue manipulation
 - Playback control (play, pause, stop, next, prev)
-- Server.py integration with USE_NEW_CONTROLLER feature flag
+- Server.py integration with controller architecture
 
 ## Future Test Additions
 

@@ -988,14 +988,15 @@ input:checked + .toggle-slider:before {
     /* Make player and queue full-width and add side padding */
     .player-container, .queue-container {
         width: 100%;
+        max-width: 500px;
         margin: 0 auto;
         padding: 0 12px;
         box-sizing: border-box;
     }
 
     .player {
-        width: 100%;
-        max-width: 100%;
+        width: calc(100% - 16px);
+        max-width: none;
     }
 
     /* Scale album art by viewport width so it remains square */
@@ -1015,17 +1016,17 @@ input:checked + .toggle-slider:before {
         font-size: 1.05em;
     }
 
-    /* Allow controls to wrap and remain visible */
+    /* Keep controls on one line with tighter spacing */
     .bottom-controls {
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: center;
+        flex-wrap: nowrap;
+        gap: 2px;
+        justify-content: space-between;
+        max-width: 100%;
+        padding: 0 4px;
     }
 
     .bottom-controls > div {
-        flex: 1 1 auto;
-        min-width: 48px;
-        text-align: center;
+        padding: 2px;
     }
 
     /* Make range inputs full width */
@@ -1084,7 +1085,15 @@ input:checked + .toggle-slider:before {
     .album { font-size: 0.95em; }
     .artist { font-size: 0.95em; }
 
-    .bottom-controls svg { width: 36px; height: 36px; }
+    /* Further tighten spacing for very small screens */
+    .bottom-controls {
+        gap: 1px;
+        padding: 0 2px;
+    }
+    
+    .bottom-controls > div {
+        padding: 1px;
+    }
 
     .menucontent { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); grid-auto-rows: auto; }
     .album-card { width: 100%; height: auto; }

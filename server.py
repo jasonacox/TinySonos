@@ -44,9 +44,6 @@ import soco # type: ignore
 
 BUILD = "0.1.0"  # Major release: Command-queue architecture with hyper-aggressive playback controller
 
-# Feature flag for new controller (set to "true" to enable)
-USE_NEW_CONTROLLER = os.getenv("USE_NEW_CONTROLLER", "true").lower() in ("true", "1", "yes")
-
 # Defaults
 APIPORT = 8001
 MEDIAPORT = 54000
@@ -144,52 +141,40 @@ sonos = list(soco.discover())[0]
 sonos = sonos.group.coordinator
 zone = sonos.ip_address
 
-# Initialize new controller architecture if enabled
-controller = None
-adapter = None
+# Initialize controller architecture
+from src.controller import PlaybackController
+from src.adapter import ControllerAdapter
 
-if USE_NEW_CONTROLLER:
-    try:
-        from src.controller import PlaybackController
-        from src.adapter import ControllerAdapter
-        
-        log.info("=" * 60)
-        log.info("NEW CONTROLLER ARCHITECTURE ENABLED")
-        log.info("=" * 60)
-        
-        # Create controller
-        controller = PlaybackController(
-            sonos=sonos,
-            db=db,
-            db_songkey=db_songkey,
-            mediahost=MEDIAHOST if MEDIAHOST else socket.gethostbyname(socket.gethostname()),
-            mediaport=MEDIAPORT,
-            mediapath=MEDIAPATH
-        )
-        
-        # Create adapter for backward compatibility
-        adapter = ControllerAdapter(controller)
-        
-        # Start controller thread
-        controller.start()
-        
-        # Connect SSE callbacks for real-time client updates
-        controller.on_track_changed = lambda data: sse_broadcast('track_changed', data)
-        controller.on_queue_changed = lambda data: sse_broadcast('queue_changed', data)
-        controller.on_state_changed = lambda data: sse_broadcast('playback_state', data)
-        controller.on_volume_changed = lambda data: sse_broadcast('volume_changed', data)
-        
-        log.info("PlaybackController: Started successfully")
-        log.info("Adapter: Created for backward compatibility")
-        log.info("SSE Callbacks: Connected to controller")
-        log.info("=" * 60)
-        
-    except Exception as e:
-        log.error(f"Failed to initialize new controller: {e}")
-        log.error("Falling back to legacy architecture")
-        USE_NEW_CONTROLLER = False
-        controller = None
-        adapter = None
+log.info("=" * 60)
+log.info("CONTROLLER ARCHITECTURE")
+log.info("=" * 60)
+
+# Create controller
+controller = PlaybackController(
+    sonos=sonos,
+    db=db,
+    db_songkey=db_songkey,
+    mediahost=MEDIAHOST if MEDIAHOST else socket.gethostbyname(socket.gethostname()),
+    mediaport=MEDIAPORT,
+    mediapath=MEDIAPATH
+)
+
+# Create adapter for backward compatibility
+adapter = ControllerAdapter(controller)
+
+# Start controller thread
+controller.start()
+
+# Connect SSE callbacks for real-time client updates
+controller.on_track_changed = lambda data: sse_broadcast('track_changed', data)
+controller.on_queue_changed = lambda data: sse_broadcast('queue_changed', data)
+controller.on_state_changed = lambda data: sse_broadcast('playback_state', data)
+controller.on_volume_changed = lambda data: sse_broadcast('volume_changed', data)
+
+log.info("PlaybackController: Started successfully")
+log.info("Adapter: Created")
+log.info("SSE Callbacks: Connected to controller")
+log.info("=" * 60)
 
 # Helpful Functions
 
@@ -391,7 +376,7 @@ class apihandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global musicqueue, zone, sonos, shuffle, repeat, state, stop, playing
         global db, db_added, db_albums, db_artists, db_songs, db_songkey, db_filetime
-        global controller, adapter, serverstats, USE_NEW_CONTROLLER
+        global controller, adapter, serverstats
         self.send_response(200)
         message = json.dumps({"Response": "OK"})
         contenttype = 'application/json'
@@ -461,43 +446,29 @@ class apihandler(BaseHTTPRequestHandler):
             sonos_transport_state = sonos.get_current_transport_info()['current_transport_state']
             c['sonos_state'] = sonos_transport_state
             
-            # Override state and album_art with controller data if using new controller
-            if USE_NEW_CONTROLLER and adapter:
-                full_state = adapter.get_full_state()
-                c['state'] = full_state['state']
-                # Use controller's album_art if we're managing playback
-                # Otherwise keep Sonos's album_art (for external sources like Alexa, Apple Music)
-                if full_state['playing'] and 'album_art' in full_state['playing']:
-                    c['album_art'] = full_state['playing']['album_art']
+            # Override state and album_art with controller data
+            full_state = adapter.get_full_state()
+            c['state'] = full_state['state']
+            # Use controller's album_art if we're managing playback
+            # Otherwise keep Sonos's album_art (for external sources like Alexa, Apple Music)
+            if full_state['playing'] and 'album_art' in full_state['playing']:
+                c['album_art'] = full_state['playing']['album_art']
             
             message = json.dumps(c)
         elif self.path == '/queuedepth':
             # Give queue depth
-            if USE_NEW_CONTROLLER and adapter:
-                message = json.dumps({"queuedepth": len(adapter.get_queue_copy())})
-            else:
-                message = json.dumps({"queuedepth": len(musicqueue)})
+            message = json.dumps({"queuedepth": len(adapter.get_queue_copy())})
         elif self.path== '/state':
-            if USE_NEW_CONTROLLER and adapter:
-                # Get state from controller
-                full_state = adapter.get_full_state()
-                s = {
-                    'state': full_state['state'],
-                    'zone': zone,
-                    'repeat': full_state['repeat'],
-                    'shuffle': full_state['shuffle'],
-                    'volume': sonos.group.volume
-                }
-                message = json.dumps(s)
-            else:
-                # Legacy path
-                s = {}
-                s['state'] = state
-                s['zone'] = zone
-                s['repeat'] = repeat
-                s['shuffle'] = shuffle
-                s['volume'] = sonos.group.volume
-                message = json.dumps(s)
+            # Get state from controller
+            full_state = adapter.get_full_state()
+            s = {
+                'state': full_state['state'],
+                'zone': zone,
+                'repeat': full_state['repeat'],
+                'shuffle': full_state['shuffle'],
+                'volume': sonos.group.volume
+            }
+            message = json.dumps(s)
         elif self.path == '/speakers':
             # List of Sonos Speakers
             log.debug("speakers: Getting speaker list")
@@ -587,25 +558,24 @@ class apihandler(BaseHTTPRequestHandler):
             soco.SoCo(ip).volume = int(vol)
             message = json.dumps({"Response": "OK"})
         elif self.path.startswith('/volume/'):
-            # Set volume for a specific group
+            # Set volume - route through controller for proper queuing and SSE notification
             updown = self.path.split('/volume/')[1].split('/')[0]
             if updown == "up":
-                vol = sonos.group.volume + 1
+                adapter.enqueue_volume_up()
             elif updown == "down":
-                vol = sonos.group.volume - 1
+                adapter.enqueue_volume_down()
             elif updown == "mute":
-                vol = 0
+                adapter.enqueue_set_volume(0)
             elif updown.isdigit():
-                vol = int(updown)
-            else:
-                vol = sonos.group.volume 
-            sonos.group.volume = vol
-            message = "OK"
+                adapter.enqueue_set_volume(int(updown))
+            message = json.dumps({"Response": "OK"})
         elif self.path.startswith('/setzone/'):
             zone = self.path.split('/setzone/')[1]
             try:
-                # Switch to the specified coordinator
-                sonos = soco.SoCo(zone)
+                # Switch controller to the specified coordinator
+                adapter.enqueue_switch_zone(zone)
+                # Also update global sonos reference for speaker list queries
+                sonos = soco.SoCo(zone).group.coordinator
                 log.info(f"Switched coordinator to {zone} ({sonos.player_name})")
                 message = json.dumps({"Response": "OK", "coordinator": zone, "name": sonos.player_name})
             except Exception as e:
@@ -615,45 +585,21 @@ class apihandler(BaseHTTPRequestHandler):
             # Give Internal Stats
             serverstats['ts'] = int(time.time())
             serverstats['mem'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            
-            # Add controller stats if using new architecture
-            if USE_NEW_CONTROLLER and controller:
-                serverstats['controller'] = controller.get_stats()
-                serverstats['controller_enabled'] = True
-            else:
-                serverstats['controller_enabled'] = False
+            serverstats['controller'] = controller.get_stats()
             
             message = json.dumps(serverstats)
         elif self.path == '/queue':
             # Return current queue
-            if USE_NEW_CONTROLLER and adapter:
-                message = json.dumps(adapter.get_queue_copy())
-            else:
-                message = json.dumps(musicqueue)
+            message = json.dumps(adapter.get_queue_copy())
         elif self.path == '/queue/clear':
             # Clear current queue
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_clear_queue()
-            else:
-                musicqueue = []
+            adapter.enqueue_clear_queue()
         elif self.path== '/play':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_play()
-            else:
-                stop = False
-                sonos.play()
+            adapter.enqueue_play()
         elif self.path== '/pause':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_pause()
-            else:
-                stop = True
-                sonos.pause()
+            adapter.enqueue_pause()
         elif self.path== '/stop':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_stop()
-            else:
-                stop = True
-                sonos.stop()
+            adapter.enqueue_stop()
         elif self.path== '/disconnect':
             # Disconnect from external music sources by stopping and clearing queue
             try:
@@ -662,61 +608,17 @@ class apihandler(BaseHTTPRequestHandler):
             except Exception as e:
                 log.debug(f"Disconnect: {e}")
         elif self.path== '/volumeup':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_volume_up()
-            else:
-                sonos.group.volume = sonos.group.volume + 1
+            adapter.enqueue_volume_up()
         elif self.path== '/volumedown':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_volume_down()
-            else:
-                sonos.group.volume = sonos.group.volume - 1
+            adapter.enqueue_volume_down()
         elif self.path== '/next':
-            if USE_NEW_CONTROLLER and adapter:
-                # Use new controller - no race conditions!
-                adapter.enqueue_next()
-            elif len(musicqueue) > 0:
-                # Legacy code path
-                playing = musicqueue.pop(0)
-                if repeat:
-                    musicqueue.append(playing)
-                sonos.play_uri(playing['path'])
-                # Immediately broadcast track change via SSE for instant UI update
-                sse_broadcast('track_changed', {
-                    'title': playing.get('title', ''),
-                    'artist': playing.get('artist', ''),
-                    'album': playing.get('album', ''),
-                    'position': '0:00:00',
-                    'duration': playing.get('duration', '0:00:00'),
-                    'album_art': playing.get('album_art', '')
-                })
-                sse_broadcast('queue_changed', {'queuedepth': len(musicqueue)})
-                log.info(f"Next: Playing {playing.get('title', 'Unknown')}")
-            else:
-                # Empty playlist, just send next command
-                sonos.next()
-                playing = {}
-                message = json.dumps({"Response": "Sent Next - Playlist Empty"})
+            adapter.enqueue_next()
         elif self.path== '/prev':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_prev()
-            elif len(musicqueue) < 1:
-                # nothing in queue, just send prev command
-                sonos.previous()
-            else:
-                # replay current song
-                sonos.play_uri(playing['path'])
-                stop = False
+            adapter.enqueue_prev()
         elif self.path=='/toggle/repeat':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_toggle_repeat()
-            else:
-                repeat = not repeat
+            adapter.enqueue_toggle_repeat()
         elif self.path=='/toggle/shuffle':
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_toggle_shuffle()
-            else:
-                shuffle = not shuffle
+            adapter.enqueue_toggle_shuffle()
         elif self.path== '/rescan':
             # rescan/rediscover sonos system zones
             sonos = list(soco.discover())[0]
@@ -728,10 +630,7 @@ class apihandler(BaseHTTPRequestHandler):
             s['uid'] = sonos.uid
             message = json.dumps(s)
         elif self.path=='/playing':
-            if USE_NEW_CONTROLLER and adapter:
-                message = json.dumps(adapter.get_playing_copy())
-            else:
-                message = json.dumps(playing)
+            message = json.dumps(adapter.get_playing_copy())
         elif self.path == '/listm3u' or self.path == '/playlists':
             # List all m3u files in M3UPATH
             message = json.dumps(list_m3u(M3UPATH))
@@ -751,58 +650,34 @@ class apihandler(BaseHTTPRequestHandler):
             for item in playlist:
                 songs.append(item)
             
-            if USE_NEW_CONTROLLER and adapter:
-                # Use controller - it will handle shuffle internally based on current setting
-                should_shuffle = adapter.shuffle
-                if should_shuffle:
-                    random.shuffle(songs)
-                
-                # Build song list for controller
-                formatted_songs = []
-                for item in songs:
-                    song = {}
-                    song['id'] = item['id']
-                    song['title'] = item['title']
-                    song['artist'] = item['artist']
-                    song['length'] = item['length']
-                    song['album'] = item['album']
-                    song['albumartist'] = item['albumartist']
-                    song['path'] = "http://%s:%d%s" % (MEDIAHOST,
-                        MEDIAPORT, requests.utils.quote(item['path']))
-                    album_art = None
-                    if item['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, item['akey'])):
-                        album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
-                            MEDIAPORT, item['akey'])
-                    song['album_art'] = album_art
-                    song['akey'] = item['akey']
-                    song['skey'] = item['skey']
-                    formatted_songs.append(song)
-                
-                adapter.enqueue_add_songs(formatted_songs)
-                message = json.dumps({"Response": "Added {} Songs".format(len(formatted_songs))})
-            else:
-                # Legacy path
-                if shuffle:
-                    random.shuffle(songs)
-                for item in songs:
-                    song = {}
-                    song['id'] = item['id']
-                    song['title'] = item['title']
-                    song['artist'] = item['artist']
-                    song['length'] = item['length']
-                    song['album'] = item['album']
-                    song['albumartist'] = item['albumartist']
-                    song['path'] = "http://%s:%d%s" % (MEDIAHOST,
-                        MEDIAPORT, requests.utils.quote(item['path']))
-                    album_art = None
-                    if item['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, item['akey'])):
-                        album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
-                            MEDIAPORT, item['akey'])
-                    song['album_art'] = album_art
-                    song['akey'] = item['akey']
-                    song['skey'] = item['skey']
-                    musicqueue.append(song)
-                message = json.dumps({"Response": "Added {} Songs".format(len(songs))})
+            # Controller handles shuffle internally based on current setting
+            should_shuffle = adapter.shuffle
+            if should_shuffle:
+                random.shuffle(songs)
+            
+            # Build song list for controller
+            formatted_songs = []
+            for item in songs:
+                song = {}
+                song['id'] = item['id']
+                song['title'] = item['title']
+                song['artist'] = item['artist']
+                song['length'] = item['length']
+                song['album'] = item['album']
+                song['albumartist'] = item['albumartist']
+                song['path'] = "http://%s:%d%s" % (MEDIAHOST,
+                    MEDIAPORT, requests.utils.quote(item['path']))
+                album_art = None
+                if item['akey'] and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, item['akey'])):
+                    album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
+                        MEDIAPORT, item['akey'])
+                song['album_art'] = album_art
+                song['akey'] = item['akey']
+                song['skey'] = item['skey']
+                formatted_songs.append(song)
+            
+            adapter.enqueue_add_songs(formatted_songs)
+            message = json.dumps({"Response": "Added {} Songs".format(len(formatted_songs))})
         elif self.path.startswith('/addsong/'):
             # Load single song into queue - key in URI
             key = self.path.split('/addsong/')[1]
@@ -828,10 +703,7 @@ class apihandler(BaseHTTPRequestHandler):
                     MEDIAPORT, song['akey'])
             song['album_art'] = album_art
             
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_add_songs([song])
-            else:
-                musicqueue.append(song)
+            adapter.enqueue_add_songs([song])
             
             message = json.dumps({"Response": "Added 1 Song"})
         elif self.path.startswith('/playfile/'):
@@ -843,10 +715,7 @@ class apihandler(BaseHTTPRequestHandler):
             log.debug("Add PlayFile: {}".format(playfile))
             song['path'] = "http://%s:%d/%s" % (MEDIAHOST, MEDIAPORT, playfile)
             
-            if USE_NEW_CONTROLLER and adapter:
-                adapter.enqueue_add_songs([song])
-            else:
-                musicqueue.append(song)
+            adapter.enqueue_add_songs([song])
             
             message = json.dumps({"Response": "Added 1 Song"})
         # TODO
@@ -901,36 +770,11 @@ class apihandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/albumadd/"):
             album_id = self.path.split('/albumadd/')[1]
             if album_id.isdigit() and str(album_id) in db:
-                if USE_NEW_CONTROLLER and adapter:
-                    # Use new controller - just enqueue command
-                    adapter.enqueue_add_album(album_id)
-                    # Get count from db for response
-                    count = len(db[str(album_id)]["tracks"])
-                    message = json.dumps({"Response": "Added %d Songs" % count})
-                else:
-                    # Legacy code path - Load album of songs into queue
-                    akey = db[str(album_id)]["key"]
-                    count = 0
-                    for item in db[str(album_id)]["tracks"]:
-                        song = {}
-                        s = db[str(album_id)]["tracks"][item]
-                        song['title'] = s["song"]
-                        song['artist'] = s['artist']
-                        song['length'] = s['length']
-                        song['album'] = db[str(album_id)]['title']
-                        song['albumartist'] = db[str(album_id)]['artist']
-                        song['path'] = "http://%s:%d%s" % (MEDIAHOST,
-                            MEDIAPORT, requests.utils.quote(s['path'][0]))
-                        album_art = None
-                        if akey and os.path.isfile("%s/album-art/%s.png" % (MEDIAPATH, akey)):
-                            album_art = "http://%s:%d/album-art/%s.png" % (MEDIAHOST,
-                                MEDIAPORT, akey)
-                        song['album_art'] = album_art
-                        song['akey'] = akey
-                        song['skey'] = s["key"]
-                        musicqueue.append(song)
-                        count += 1
-                    message = json.dumps({"Response": "Added %d Songs" % count})
+                # Enqueue album via controller
+                adapter.enqueue_add_album(album_id)
+                # Get count from db for response
+                count = len(db[str(album_id)]["tracks"])
+                message = json.dumps({"Response": "Added %d Songs" % count})
             else:
                 message = json.dumps(None)   
         elif self.path == "/db":
@@ -979,49 +823,7 @@ class apihandler(BaseHTTPRequestHandler):
         
 # Threads
 
-def sonoslisten():
-    """
-    NOT USED YET
-    Thread to listen for Sonos events to reduce polling
-    """
-    global running, musicqueue, state, repeat, shuffle, zone
-    coordinator = None
-
-    sonos = soco.SoCo(zone).group.coordinator
-    device = soco.discover().pop().group.coordinator
-    print (device.player_name)
-    sub = device.renderingControl.subscribe()
-    sub2 = device.avTransport.subscribe()
-
-    while True:
-        if zone != coordinator:
-            # switch to new zone?
-            coordinator = zone
-            log.debug("SonosListen: switching to {} speakers".format(zone))
-            device = soco.SoCo(zone).group.coordinator
-            sub = device.renderingControl.subscribe()
-            sub2 = device.avTransport.subscribe()
-        try:
-            event = sub.events.get(timeout=0.5)
-            print (event.variables)
-            # {'volume': {'LF': '100', 'Master': '6', 'RF': '100'}}
-        except Empty:
-            pass
-        try:
-            event = sub2.events.get(timeout=0.5)
-            print (event.variables)
-            # 'transport_state': 'PAUSED_PLAYBACK
-            # 'transport_state': 'TRANSITIONING'
-            # 'transport_state': 'PLAYING'
-            # event.variables['transport_state']
-        except Empty:
-            pass
-
-        except KeyboardInterrupt:
-            sub.unsubscribe()
-            sub2.unsubscribe()
-            event_listener.stop()
-            break
+# Threads
 
 def sse_broadcast(event_type, data):
     """Send event to all connected SSE clients"""
@@ -1039,174 +841,6 @@ def sse_broadcast(event_type, data):
             client_queue.put_nowait(event)
         except queue.Full:
             log.warning("SSE: Client queue full, skipping event")
-
-def sse_monitor():
-    """
-    Background thread to monitor Sonos state and broadcast SSE events
-    """
-    global running, sse_state, zone, sonos, state, repeat, shuffle, musicqueue
-    
-    log.info("SSE Monitor: Started")
-    
-    while running:
-        try:
-            # Only monitor if we have connected clients
-            if not sse_clients:
-                time.sleep(1)
-                continue
-            
-            # Get current zone coordinator
-            current_sonos = soco.SoCo(zone).group.coordinator
-            
-            # Check for track changes
-            try:
-                track_info = current_sonos.get_current_track_info()
-                
-                # Prefer playing dictionary (from media library) for metadata, fallback to Sonos API
-                title = playing.get('title', '') or track_info.get('title', '')
-                artist = playing.get('artist', '') or track_info.get('artist', '')
-                album = playing.get('album', '') or track_info.get('album', '')
-                
-                current_track = f"{title}|{artist}|{album}"
-                
-                if current_track != sse_state['last_track']:
-                    sse_state['last_track'] = current_track
-                    # Use server's album art if available (from media library), otherwise use Sonos
-                    album_art_url = playing.get('album_art', '') or track_info.get('album_art', '')
-                    
-                    log.info(f"SSE: Track changed - Title: {title}, Album Art: '{album_art_url}'")
-                    # Broadcast track change event with metadata from playing dictionary (media library)
-                    sse_broadcast('track_changed', {
-                        'title': title,
-                        'artist': artist,
-                        'album': album,
-                        'position': track_info.get('position', '0:00:00'),
-                        'duration': track_info.get('duration', '0:00:00'),
-                        'album_art': album_art_url
-                    })
-                    log.debug("SSE: Track changed")
-            except Exception as e:
-                log.debug(f"SSE Monitor: Error getting track info: {e}")
-            
-            # Check for playback state changes
-            try:
-                transport_info = current_sonos.get_current_transport_info()
-                current_state = transport_info['current_transport_state']
-                
-                if current_state != sse_state['last_state']:
-                    sse_state['last_state'] = current_state
-                    # Broadcast state change event
-                    sse_broadcast('playback_state', {
-                        'state': current_state,
-                        'zone': zone,
-                        'repeat': repeat,
-                        'shuffle': shuffle,
-                        'volume': current_sonos.group.volume
-                    })
-                    log.debug(f"SSE: Playback state changed to {current_state}")
-            except Exception as e:
-                log.debug(f"SSE Monitor: Error getting transport info: {e}")
-            
-            # Check for volume changes
-            try:
-                current_volume = current_sonos.group.volume
-                if current_volume != sse_state['last_volume']:
-                    sse_state['last_volume'] = current_volume
-                    # Broadcast volume change event
-                    sse_broadcast('volume_changed', {
-                        'volume': current_volume
-                    })
-                    log.debug(f"SSE: Volume changed to {current_volume}")
-            except Exception as e:
-                log.debug(f"SSE Monitor: Error getting volume: {e}")
-            
-            # Check for speaker/group changes (check every 2 seconds, not every iteration)
-            if int(time.time()) % 2 == 0:
-                try:
-                    speakers = {}
-                    discovered = list(soco.discover())
-                    current_zone = soco.SoCo(zone)
-                    
-                    for z in discovered:
-                        speakers[z.player_name] = {
-                            "ip": z.ip_address,
-                            "coordinator": soco.SoCo(z.ip_address).group.coordinator == soco.SoCo(z.ip_address),
-                            "state": soco.SoCo(z.ip_address) in current_zone.group.members,
-                            "volume": z.volume
-                        }
-                    
-                    speakers_hash = json.dumps(speakers, sort_keys=True)
-                    if speakers_hash != sse_state['last_speakers']:
-                        sse_state['last_speakers'] = speakers_hash
-                        # Broadcast speakers change event
-                        sse_broadcast('speakers_changed', speakers)
-                        log.debug("SSE: Speakers configuration changed")
-                except Exception as e:
-                    log.debug(f"SSE Monitor: Error getting speakers: {e}")
-            
-            # Check for queue depth changes
-            current_queue_depth = len(musicqueue)
-            if current_queue_depth != sse_state['last_queue_depth']:
-                sse_state['last_queue_depth'] = current_queue_depth
-                # Broadcast queue change event
-                sse_broadcast('queue_changed', {
-                    'queuedepth': current_queue_depth
-                })
-                log.debug(f"SSE: Queue depth changed to {current_queue_depth}")
-            
-            # Sleep briefly before next check (200ms for responsive updates)
-            time.sleep(0.2)
-            
-        except Exception as e:
-            log.warning(f"SSE Monitor: Unexpected error: {e}")
-            time.sleep(1)
-    
-    log.info("SSE Monitor: Stopped")
-
-def jukebox():
-    """
-    Thread to manage playlist and Sonos Speakers
-    """
-    global running, musicqueue, state, repeat, shuffle, zone, playing
-    coordinator = None
-
-    while running:
-        if zone != coordinator:
-            # switch to new zone?
-            coordinator = zone
-            log.debug("Jukebox: switching to {} speakers".format(zone))
-            try:
-                sonos = soco.SoCo(zone).group.coordinator
-            except:
-                log.debug("Jukebox: ERROR setting sonos zone")
-                pass
-        # Are there items in the queue?
-        if len(musicqueue) > 0 and not stop:
-            try:
-                # is it running?
-                state = sonos.get_current_transport_info()['current_transport_state']
-                # print("STATE: Sonos {}".format(state), end="\r")
-                if state != "PLAYING":
-                    # Queue up next song
-                    playing = musicqueue.pop(0)
-                    if repeat:
-                        musicqueue.append(playing)
-                    # Play it
-                    sonos.play_uri(playing['path'])
-                    # Immediately broadcast track change via SSE
-                    sse_broadcast('track_changed', {
-                        'title': playing.get('title', ''),
-                        'artist': playing.get('artist', ''),
-                        'album': playing.get('album', ''),
-                        'position': '0:00:00',
-                        'duration': playing.get('duration', '0:00:00'),
-                        'album_art': playing.get('album_art', '')
-                    })
-                    sse_broadcast('queue_changed', {'queuedepth': len(musicqueue)})
-                    log.debug("Play", playing['path'])
-            except:
-                log.debug("Jukebox: ERROR sending sonos commands")
-        time.sleep(0.5)
 
 def api(port):
     """
@@ -1246,13 +880,7 @@ if __name__ == "__main__":
     apiServer = threading.Thread(target=api, args=(APIPORT,))
     mediaServer = threading.Thread(target=media, args=(MEDIAPORT,))
     
-    # Legacy threads - only used when new controller is disabled
-    if not USE_NEW_CONTROLLER:
-        jb = threading.Thread(target=jukebox)
-        sseMonitor = threading.Thread(target=sse_monitor)
-        log.info("Legacy Mode: Jukebox and SSE Monitor threads will start")
-    else:
-        log.info("New Controller Mode: Jukebox handled by PlaybackController")
+    log.info("Controller Mode: Jukebox handled by PlaybackController")
     
     log.info(
         "TinySonos [v%s - SoCo %s] - Web Based Sonos Controller and Jukebox"
@@ -1265,11 +893,6 @@ if __name__ == "__main__":
     # start threads
     apiServer.start()
     mediaServer.start()
-    
-    # Only start legacy threads if not using new controller
-    if not USE_NEW_CONTROLLER:
-        jb.start()
-        sseMonitor.start()
 
     log.info(" - API Endpoint on http://%s:%d" % (MEDIAHOST, APIPORT))
     log.info(" - Media Endpoint on http://%s:%d" % (MEDIAHOST, MEDIAPORT))

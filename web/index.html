@@ -398,7 +398,7 @@ Credits:
                 document.getElementById("play").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            else if(data.state == "PAUSED_PLAYBACK" || data.state == "STOPPED") {
+            else if(data.state == "PAUSED" || data.state == "PAUSED_PLAYBACK" || data.state == "STOPPED") {
                 // Show play button - user can start/resume
                 document.getElementById("play").classList='play-pause active';
                 document.getElementById("pause").classList='play-pause';
@@ -413,7 +413,7 @@ Credits:
                     document.getElementById("stop-btn").classList.remove('primary');
                 }
             }
-            else if(data.state == "PAUSED_PLAYBACK") {
+            else if(data.state == "PAUSED" || data.state == "PAUSED_PLAYBACK") {
                 if (document.getElementById("pause-btn")) {
                     document.getElementById("pause-btn").classList.add('primary');
                     document.getElementById("play-btn").classList.remove('primary');
@@ -649,6 +649,44 @@ Credits:
             // Update state indicator (show if external system is controlling Sonos)
             updateStateIndicator(data.state, data.sonos_state);
             
+            // Update control button states based on current state
+            if (data.state) {
+                // Bottom-controls: Show action user can take (play when stopped/paused, pause when playing)
+                if(data.state == "PLAYING" || data.state == "TRANSITIONING") {
+                    document.getElementById("pause").classList='play-pause active';
+                    document.getElementById("play").classList='play-pause';
+                    document.getElementById("stop").classList='play-pause';
+                }
+                else if(data.state == "PAUSED" || data.state == "PAUSED_PLAYBACK" || data.state == "STOPPED") {
+                    document.getElementById("play").classList='play-pause active';
+                    document.getElementById("pause").classList='play-pause';
+                    document.getElementById("stop").classList='play-pause';
+                }
+                
+                // Control panel buttons: Show current state
+                if(data.state == "PLAYING" || data.state == "TRANSITIONING") {
+                    if (document.getElementById("play-btn")) {
+                        document.getElementById("play-btn").classList.add('primary');
+                        document.getElementById("pause-btn").classList.remove('primary');
+                        document.getElementById("stop-btn").classList.remove('primary');
+                    }
+                }
+                else if(data.state == "PAUSED" || data.state == "PAUSED_PLAYBACK") {
+                    if (document.getElementById("pause-btn")) {
+                        document.getElementById("pause-btn").classList.add('primary');
+                        document.getElementById("play-btn").classList.remove('primary');
+                        document.getElementById("stop-btn").classList.remove('primary');
+                    }
+                }
+                else if(data.state == "STOPPED") {
+                    if (document.getElementById("stop-btn")) {
+                        document.getElementById("stop-btn").classList.add('primary');
+                        document.getElementById("play-btn").classList.remove('primary');
+                        document.getElementById("pause-btn").classList.remove('primary');
+                    }
+                }
+            }
+            
             // Update player info (title, artist, album) with XML parsing fallback
             let title = data.title;
             let artist = data.artist;
@@ -751,7 +789,7 @@ Credits:
                 document.getElementById("play").classList='play-pause';
                 document.getElementById("stop").classList='play-pause';
             }
-            else if(data.state == "PAUSED_PLAYBACK" || data.state == "STOPPED") {
+            else if(data.state == "PAUSED" || data.state == "PAUSED_PLAYBACK" || data.state == "STOPPED") {
                 // Show play button - user can start/resume
                 document.getElementById("play").classList='play-pause active';
                 document.getElementById("pause").classList='play-pause';
@@ -766,7 +804,7 @@ Credits:
                     document.getElementById("stop-btn").classList.remove('primary');
                 }
             }
-            else if(data.state == "PAUSED_PLAYBACK") {
+            else if(data.state == "PAUSED" || data.state == "PAUSED_PLAYBACK") {
                 if (document.getElementById("pause-btn")) {
                     document.getElementById("pause-btn").classList.add('primary');
                     document.getElementById("play-btn").classList.remove('primary');
@@ -1271,6 +1309,10 @@ Credits:
     }
 
     // Volume Change Handlers
+    // Track pending volume refresh timeout to prevent race conditions
+    let volumeRefreshTimeout = null;
+    let lastVolumeChangeTime = 0;
+
     async function updateVolume(value) {
         document.getElementById('volume').textContent = value;
 
@@ -1283,6 +1325,19 @@ Credits:
         }
         // Refresh Display
         setTimeout(showstates, 100);
+        
+        // Debounced volume refresh - cancel previous and reschedule
+        lastVolumeChangeTime = Date.now();
+        if (volumeRefreshTimeout) {
+            clearTimeout(volumeRefreshTimeout);
+        }
+        volumeRefreshTimeout = setTimeout(() => {
+            // Only refresh if no changes in last 500ms
+            if (Date.now() - lastVolumeChangeTime >= 500) {
+                updatevolume();
+                volumeRefreshTimeout = null;
+            }
+        }, 1000);
     }
     function updateVolumeDisplay(value) {
         const volumeValue = document.getElementById('volume');
@@ -1292,11 +1347,21 @@ Credits:
         document.getElementById('volume-' + ip).textContent = value;
         document.getElementById('volume-slider-' + ip).value = value;
         try {
-            const response = await fetch(getApiUrl(`/speaker_vol/${ip}/${value}`));
+            const response = await fetch(getApiUrl(`speaker_vol/${ip}/${value}`));
             const data = await response.json();
             console.log(data);
-            // Refresh speaker list after a brief delay to get updated state from server
-            setTimeout(updatevolume, 1000);
+            
+            // Debounced volume refresh - cancel previous and reschedule
+            lastVolumeChangeTime = Date.now();
+            if (volumeRefreshTimeout) {
+                clearTimeout(volumeRefreshTimeout);
+            }
+            volumeRefreshTimeout = setTimeout(() => {
+                if (Date.now() - lastVolumeChangeTime >= 500) {
+                    updatevolume();
+                    volumeRefreshTimeout = null;
+                }
+            }, 1000);
         } catch (error) {
             handleApiError(error, `Set speaker ${ip} volume`);
         }
@@ -1312,11 +1377,21 @@ Credits:
         document.getElementById('volume-' + ip).textContent = newvalue;
         document.getElementById('volume-slider-' + ip).value = newvalue;
         try {
-            const response = await fetch(getApiUrl(`/speaker_vol/${ip}/${newvalue}`));
+            const response = await fetch(getApiUrl(`speaker_vol/${ip}/${newvalue}`));
             const data = await response.json();
             console.log(data);
-            // Refresh speaker list after a brief delay to get updated state from server
-            setTimeout(updatevolume, 1000);
+            
+            // Debounced volume refresh - cancel previous and reschedule
+            lastVolumeChangeTime = Date.now();
+            if (volumeRefreshTimeout) {
+                clearTimeout(volumeRefreshTimeout);
+            }
+            volumeRefreshTimeout = setTimeout(() => {
+                if (Date.now() - lastVolumeChangeTime >= 500) {
+                    updatevolume();
+                    volumeRefreshTimeout = null;
+                }
+            }, 1000);
         } catch (error) {
             handleApiError(error, `Set speaker ${ip} volume`);
         }

@@ -438,6 +438,8 @@ class PlaybackController:
         if volume is not None:
             try:
                 self.sonos.group.volume = int(volume)
+                # Small delay to let Sonos hardware acknowledge the change
+                time.sleep(0.1)
                 self._notify_volume_changed()
             except Exception as e:
                 log.error(f"Error setting volume: {e}")
@@ -447,6 +449,8 @@ class PlaybackController:
         try:
             current = self.sonos.group.volume
             self.sonos.group.volume = min(100, current + 1)
+            # Small delay to let Sonos hardware acknowledge the change
+            time.sleep(0.1)
             self._notify_volume_changed()
         except Exception as e:
             log.error(f"Error increasing volume: {e}")
@@ -456,6 +460,8 @@ class PlaybackController:
         try:
             current = self.sonos.group.volume
             self.sonos.group.volume = max(0, current - 1)
+            # Small delay to let Sonos hardware acknowledge the change
+            time.sleep(0.1)
             self._notify_volume_changed()
         except Exception as e:
             log.error(f"Error decreasing volume: {e}")
