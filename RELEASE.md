@@ -1,5 +1,88 @@
 # Release Notes
 
+## 📋 Future Development (TODO)
+
+### High Priority
+- [ ] **FastAPI Migration**
+  - Migrate from http.server to FastAPI + Uvicorn
+  - Async/await support for better concurrency
+  - Automatic OpenAPI/Swagger documentation
+  - Pydantic models for request/response validation
+  - WebSocket support (can replace/complement SSE)
+  - Type hints and better IDE support
+  - Backward compatible endpoints during migration
+
+- [ ] **Enhanced Queue Management**
+  - Reorder songs in queue (drag-and-drop)
+  - Remove individual songs by index
+  - Save/load queue as playlist
+  - Queue history and restoration
+
+- [ ] **Event-Driven Architecture Completion**
+  - Reduce polling frequency by improving SSE reliability
+  - Add WebSocket support for bidirectional communication
+  - Implement heartbeat mechanism for connection monitoring
+
+- [ ] **Comprehensive Testing**
+  - Automated integration tests for all endpoints
+  - End-to-end SSE event stream tests
+  - External source takeover scenario tests
+  - Edge case coverage (empty queue, network errors, etc.)
+
+### Medium Priority
+- [ ] **Search & Browse Enhancements**
+  - Artist browsing with album listings
+  - Advanced search with filters (year, genre, etc.)
+  - Search history and favorites
+  - "Now Playing" artist/album quick navigation
+
+- [ ] **Playlist Management**
+  - Create/edit/delete playlists via UI
+  - Smart playlists with auto-update rules
+  - Playlist import/export (M3U, Spotify, etc.)
+  - Collaborative playlists
+
+- [ ] **Authentication & Security**
+  - Multi-user support with authentication
+  - Role-based access control
+  - API rate limiting
+  - Secure token-based API access
+
+### Low Priority
+- [ ] **Advanced Features**
+  - Crossfade between tracks
+  - Equalizer controls
+  - Sleep timer
+  - Alarm/wake-up scheduling
+  - Podcast support
+
+- [ ] **API Improvements**
+  - REST API versioning (v2)
+  - GraphQL API option
+  - Swagger/OpenAPI documentation
+  - API client libraries (Python, JavaScript)
+
+- [ ] **Performance Optimization**
+  - Database indexing improvements
+  - Album art caching strategy
+  - Progressive loading for large libraries
+  - CDN support for media files
+
+### Infrastructure
+- [ ] **Production Deployment**
+  - Docker Compose with monitoring
+  - Kubernetes deployment templates
+  - Health check endpoints
+  - Metrics and observability (Prometheus/Grafana)
+
+- [ ] **Documentation**
+  - Video tutorials
+  - Troubleshooting guide expansion
+  - Architecture decision records (ADRs)
+  - Contributing guidelines
+
+---
+
 ## v0.1.0 - Hyper-Aggressive Playback Controller (Current)
 
 This is a **major release** that introduces a revolutionary hyper-aggressive playback controller. The new architecture eliminates race conditions and ensures seamless, continuous music playback without the skipping issues that plague native Sonos.
