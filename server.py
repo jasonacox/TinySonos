@@ -137,8 +137,12 @@ sse_state = {
 }
 
 # Set up Sonos
-sonos = list(soco.discover())[0]
-sonos = sonos.group.coordinator
+from src.discovery import discover_speakers, find_coordinator
+sonos = find_coordinator()
+if sonos is None:
+    log.error("No Sonos speakers found on the network - is a speaker powered on "
+              "and on the same subnet as TinySonos?")
+    sys.exit(1)
 zone = sonos.ip_address
 
 # Initialize controller architecture
@@ -474,13 +478,14 @@ class apihandler(BaseHTTPRequestHandler):
             log.debug("speakers: Getting speaker list")
             if zone is None:
                 log.warning("speakers: Zone is None, discovering speakers")
-                sonos = list(soco.discover())[0]
-                sonos = sonos.group.coordinator
-                zone = sonos.ip_address
-                log.info(f"speakers: Set zone to {zone}")
+                coordinator = find_coordinator()
+                if coordinator is not None:
+                    sonos = coordinator
+                    zone = sonos.ip_address
+                    log.info(f"speakers: Set zone to {zone}")
             
             speakers = {}
-            discovered = list(soco.discover())
+            discovered = discover_speakers()
             log.debug(f"speakers: Found {len(discovered)} speakers")
             current_zone = soco.SoCo(zone)
             log.debug(f"speakers: Current zone coordinator: {current_zone.group.coordinator.player_name} at {current_zone.group.coordinator.ip_address}")
@@ -620,10 +625,11 @@ class apihandler(BaseHTTPRequestHandler):
         elif self.path=='/toggle/shuffle':
             adapter.enqueue_toggle_shuffle()
         elif self.path== '/rescan':
-            # rescan/rediscover sonos system zones
-            sonos = list(soco.discover())[0]
-            sonos = sonos.group.coordinator
-            zone = sonos.ip_address
+            # rescan/rediscover sonos system zones (keep current zone if none found)
+            coordinator = find_coordinator()
+            if coordinator is not None:
+                sonos = coordinator
+                zone = sonos.ip_address
         elif self.path== '/sonos':
             s = {}
             s['household_id'] = sonos.household_id
