@@ -27,6 +27,11 @@ except Exception as e:
     print(f"✗ server.py import failed: {e}")
     print("  This is expected if Sonos speaker not available")
     print("  Try running with mock: python test_integration.py --mock")
+    if "pytest" in sys.modules:
+        # Under pytest, skip this module instead of exiting the whole session
+        import pytest
+        pytest.skip(f"server.py import failed (no Sonos speaker?): {e}",
+                    allow_module_level=True)
     sys.exit(1)
 
 print("\n=== Integration Test Summary ===")
